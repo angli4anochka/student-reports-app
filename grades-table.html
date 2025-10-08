@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Оценки учеников - Табличная форма</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+            padding: 2rem;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            padding: 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #2196F3;
+            margin-bottom: 2rem;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        label {
+            font-weight: bold;
+            color: #555;
+        }
+        
+        select, input {
+            padding: 0.5rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+        
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: opacity 0.2s;
+        }
+        
+        .btn:hover {
+            opacity: 0.9;
+        }
+        
+        .btn-primary {
+            background-color: #2196F3;
+            color: white;
+        }
+        
+        .btn-success {
+            background-color: #4CAF50;
+            color: white;
+        }
+        
+        .grades-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+            font-size: 0.95rem;
+        }
+        
+        .grades-table th,
+        .grades-table td {
+            border: 1px solid #ddd;
+            padding: 0.75rem;
+            text-align: center;
+            vertical-align: middle;
+        }
+        
+        .grades-table th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        .student-name {
+            text-align: left !important;
+            font-weight: 600;
+            background-color: #f0f8ff;
+            min-width: 200px;
+            position: sticky;
+            left: 0;
+            z-index: 5;
+        }
+        
+        .student-name th {
+            background-color: #e3f2fd;
+        }
+        
+        .grade-select {
+            width: 60px;
+            padding: 0.25rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            text-align: center;
+        }
+        
+        .grade-1 { background-color: #ffebee; }
+        .grade-2 { background-color: #fff3e0; }
+        .grade-3 { background-color: #e8f5e8; }
+        .grade-4 { background-color: #e3f2fd; }
+        
+        .comment-input {
+            width: 200px;
+            padding: 0.5rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            min-height: 40px;
+            resize: vertical;
+        }
+        
+        .criteria-header {
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            min-width: 80px;
+            max-width: 80px;
+            height: 120px;
+            font-size: 0.85rem;
+        }
+        
+        .legend {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            padding: 1rem;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            flex-wrap: wrap;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 3px;
+            border: 1px solid #ccc;
+        }
+        
+        .save-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 1rem;
+            border-radius: 4px;
+            color: white;
+            font-weight: bold;
+            z-index: 1000;
+            display: none;
+        }
+        
+        .save-success {
+            background-color: #4CAF50;
+        }
+        
+        .save-error {
+            background-color: #f44336;
+        }
+        
+        /* Модальные окна */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem;
+            border-bottom: 1px solid #ddd;
+            background-color: #f8f9fa;
+        }
+        
+        .modal-header h3 {
+            margin: 0;
+            color: #333;
+        }
+        
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #666;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .close-btn:hover {
+            color: #333;
+            background-color: #f0f0f0;
+            border-radius: 50%;
+        }
+        
+        .modal-body {
+            padding: 1.5rem;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+        
+        .modal-footer {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+            padding: 1.5rem;
+            border-top: 1px solid #ddd;
+            background-color: #f8f9fa;
+        }
+        
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: bold;
+            color: #555;
+        }
+        
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 1rem;
+            transition: border-color 0.2s;
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #2196F3;
+        }
+        
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        
+        .hint {
+            font-size: 0.875rem;
+            color: #666;
+            margin-top: 0.25rem;
+        }
+        
+        .error-message {
+            background-color: #ffebee;
+            color: #d32f2f;
+            padding: 0.75rem;
+            border-radius: 4px;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .grades-table {
+                font-size: 0.8rem;
+            }
+            
+            .criteria-header {
+                writing-mode: horizontal-tb;
+                height: auto;
+                min-width: 60px;
+                max-width: 60px;
+            }
+            
+            .comment-input {
+                width: 150px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Оценки учеников - Табличная форма</h1>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label for="yearSelect">Учебный год:</label>
+                <select id="yearSelect">
+                    <option value="2024/2025">2024/2025</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label for="monthSelect">Месяц:</label>
+                <select id="monthSelect">
+                    <option value="Сентябрь">Сентябрь</option>
+                    <option value="Октябрь">Октябрь</option>
+                    <option value="Ноябрь">Ноябрь</option>
+                    <option value="Декабрь">Декабрь</option>
+                    <option value="Январь">Январь</option>
+                    <option value="Февраль">Февраль</option>
+                    <option value="Март">Март</option>
+                    <option value="Апрель">Апрель</option>
+                    <option value="Май">Май</option>
+                    <option value="Июнь">Июнь</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label for="groupSelect">Группа:</label>
+                <select id="groupSelect">
+                    <option value="">Все группы</option>
+                </select>
+            </div>
+            
+            <button class="btn btn-primary" onclick="loadStudents()">Загрузить учеников</button>
+            <button class="btn btn-success" onclick="saveAllGrades()">Сохранить все оценки</button>
+        </div>
+        
+        <div class="controls" style="border-top: 1px solid #ddd; padding-top: 1rem; margin-top: 1rem;">
+            <button class="btn" onclick="showAddStudentModal()" style="background-color: #FF9800; color: white;">➕ Добавить ученика</button>
+            <button class="btn" onclick="showAddGroupModal()" style="background-color: #9C27B0; color: white;">📚 Создать группу</button>
+            <button class="btn" onclick="exportToExcel()" style="background-color: #4CAF50; color: white;">📊 Экспорт в Excel</button>
+        </div>
+        
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color grade-1"></div>
+                <span>1 - Низкий уровень</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color grade-2"></div>
+                <span>2 - Средний уровень</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color grade-3"></div>
+                <span>3 - Хороший уровень</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color grade-4"></div>
+                <span>4 - Отличный уровень</span>
+            </div>
+        </div>
+        
+        <div style="overflow-x: auto;">
+            <table class="grades-table" id="gradesTable">
+                <thead>
+                    <tr>
+                        <th class="student-name">ФИО ученика</th>
+                        <th class="criteria-header">🚀 Вовлечённость</th>
+                        <th class="criteria-header">📚 Грамматика</th>
+                        <th class="criteria-header">📖 Чтение</th>
+                        <th class="criteria-header">🗣 Говорение</th>
+                        <th class="criteria-header">📝 Выполнение ДЗ</th>
+                        <th style="min-width: 250px;">Комментарий</th>
+                    </tr>
+                </thead>
+                <tbody id="gradesTableBody">
+                    <!-- Строки с учениками будут добавлены здесь -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div id="saveStatus" class="save-status"></div>
+
+    <!-- Модальное окно добавления ученика -->
+    <div id="addStudentModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Добавить нового ученика</h3>
+                <button class="close-btn" onclick="hideAddStudentModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="newStudentName">ФИО ученика *</label>
+                    <input type="text" id="newStudentName" placeholder="Фамилия Имя Отчество" required>
+                    <div class="hint">Введите полное ФИО в формате: Фамилия Имя Отчество</div>
+                </div>
+                <div class="form-group">
+                    <label for="newStudentGroup">Группа *</label>
+                    <select id="newStudentGroup" required>
+                        <option value="">Выберите группу</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="newStudentNotes">Заметки</label>
+                    <textarea id="newStudentNotes" placeholder="Дополнительная информация об ученике..." rows="3"></textarea>
+                </div>
+                <div id="addStudentError" class="error-message" style="display: none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="hideAddStudentModal()">Отмена</button>
+                <button class="btn btn-success" onclick="addNewStudent()">Добавить ученика</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно создания группы -->
+    <div id="addGroupModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Создать новую группу</h3>
+                <button class="close-btn" onclick="hideAddGroupModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="newGroupName">Название группы *</label>
+                    <input type="text" id="newGroupName" placeholder="Например: A2 Tue 19:00" required>
+                    <div class="hint">Рекомендуемый формат: Уровень День Время (например: A1 Mon 18:00)</div>
+                </div>
+                <div class="form-group">
+                    <label for="newGroupDescription">Описание</label>
+                    <textarea id="newGroupDescription" placeholder="Описание группы, уровень, особенности..." rows="3"></textarea>
+                </div>
+                <div id="addGroupError" class="error-message" style="display: none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="hideAddGroupModal()">Отмена</button>
+                <button class="btn btn-success" onclick="addNewGroup()">Создать группу</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3001/api';
+        let students = [];
+        let currentGrades = {};
+        let availableGroups = ['A1 Mon 18:00', 'B1 Wed 19:00', 'A2 Tue 17:00', 'B2 Thu 20:00'];
+        
+        // Демо данные для тестирования
+        const demoStudents = [
+            { id: '1', fullName: 'Бугин Александр', group: 'A1 Mon 18:00' },
+            { id: '2', fullName: 'Иванова Мария Петровна', group: 'A1 Mon 18:00' },
+            { id: '3', fullName: 'Петров Дмитрий Сергеевич', group: 'B1 Wed 19:00' },
+            { id: '4', fullName: 'Сидорова Елена Викторовна', group: 'A1 Mon 18:00' },
+            { id: '5', fullName: 'Козлов Алексей Николаевич', group: 'B1 Wed 19:00' }
+        ];
+
+        async function loadStudents() {
+            const selectedGroup = document.getElementById('groupSelect').value;
+            
+            try {
+                // Попытка загрузки с API
+                const token = localStorage.getItem('token');
+                if (token) {
+                    const params = selectedGroup ? `?group=${selectedGroup}` : '';
+                    const response = await fetch(`${API_BASE}/students${params}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    
+                    if (response.ok) {
+                        students = await response.json();
+                    } else {
+                        students = demoStudents;
+                    }
+                } else {
+                    students = demoStudents;
+                }
+            } catch (error) {
+                console.log('Используем демо данные');
+                students = demoStudents;
+            }
+            
+            // Фильтрация по группе
+            if (selectedGroup) {
+                students = students.filter(s => s.group === selectedGroup);
+            }
+            
+            populateGroupSelect();
+            renderGradesTable();
+        }
+
+        function populateGroupSelect() {
+            const groupSelect = document.getElementById('groupSelect');
+            const groups = [...new Set([...demoStudents.map(s => s.group), ...availableGroups])];
+            
+            // Очищаем опции кроме "Все группы"
+            groupSelect.innerHTML = '<option value="">Все группы</option>';
+            
+            groups.forEach(group => {
+                const option = document.createElement('option');
+                option.value = group;
+                option.textContent = group;
+                groupSelect.appendChild(option);
+            });
+        }
+
+        function populateStudentGroupSelect() {
+            const groupSelect = document.getElementById('newStudentGroup');
+            const groups = [...new Set([...demoStudents.map(s => s.group), ...availableGroups])];
+            
+            // Очищаем опции кроме "Выберите группу"
+            groupSelect.innerHTML = '<option value="">Выберите группу</option>';
+            
+            groups.forEach(group => {
+                const option = document.createElement('option');
+                option.value = group;
+                option.textContent = group;
+                groupSelect.appendChild(option);
+            });
+        }
+
+        function renderGradesTable() {
+            const tbody = document.getElementById('gradesTableBody');
+            tbody.innerHTML = '';
+            
+            students.forEach((student, index) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="student-name">${student.fullName}</td>
+                    <td>
+                        <select class="grade-select" onchange="updateGradeColor(this, '${student.id}', 'involvement')" 
+                                data-student="${student.id}" data-criteria="involvement">
+                            <option value="">-</option>
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
+                        </select>
+                    </td>
+                    <td>
+                        <select class="grade-select" onchange="updateGradeColor(this, '${student.id}', 'grammar')" 
+                                data-student="${student.id}" data-criteria="grammar">
+                            <option value="">-</option>
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
+                        </select>
+                    </td>
+                    <td>
+                        <select class="grade-select" onchange="updateGradeColor(this, '${student.id}', 'reading')" 
+                                data-student="${student.id}" data-criteria="reading">
+                            <option value="">-</option>
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
+                        </select>
+                    </td>
+                    <td>
+                        <select class="grade-select" onchange="updateGradeColor(this, '${student.id}', 'speaking')" 
+                                data-student="${student.id}" data-criteria="speaking">
+                            <option value="">-</option>
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
+                        </select>
+                    </td>
+                    <td>
+                        <select class="grade-select" onchange="updateGradeColor(this, '${student.id}', 'homework')" 
+                                data-student="${student.id}" data-criteria="homework">
+                            <option value="">-</option>
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
+                        </select>
+                    </td>
+                    <td>
+                        <textarea class="comment-input" placeholder="Комментарий..." 
+                                  data-student="${student.id}" data-field="comment"
+                                  onchange="saveComment(this, '${student.id}')"></textarea>
+                    </td>
+                `;
+                tbody.appendChild(row);
+                
+                // Инициализация данных для ученика
+                if (!currentGrades[student.id]) {
+                    currentGrades[student.id] = {
+                        involvement: '',
+                        grammar: '',
+                        reading: '',
+                        speaking: '',
+                        homework: '',
+                        comment: ''
+                    };
+                }
+            });
+        }
+
+        function updateGradeColor(selectElement, studentId, criteria) {
+            const value = selectElement.value;
+            const cell = selectElement.parentElement;
+            
+            // Удаляем все классы оценок
+            cell.classList.remove('grade-1', 'grade-2', 'grade-3', 'grade-4');
+            
+            // Добавляем класс для текущей оценки
+            if (value) {
+                cell.classList.add(`grade-${value}`);
+                currentGrades[studentId][criteria] = value;
+            } else {
+                currentGrades[studentId][criteria] = '';
+            }
+            
+            // Автосохранение (опционально)
+            autoSaveStudent(studentId);
+        }
+
+        function saveComment(textareaElement, studentId) {
+            currentGrades[studentId].comment = textareaElement.value;
+            autoSaveStudent(studentId);
+        }
+
+        function autoSaveStudent(studentId) {
+            // Можно добавить автосохранение каждые несколько секунд
+            clearTimeout(window.autoSaveTimeout);
+            window.autoSaveTimeout = setTimeout(() => {
+                console.log(`Автосохранение для ученика ${studentId}:`, currentGrades[studentId]);
+            }, 2000);
+        }
+
+        async function saveAllGrades() {
+            const year = document.getElementById('yearSelect').value;
+            const month = document.getElementById('monthSelect').value;
+            
+            if (!month) {
+                showStatus('Выберите месяц!', 'error');
+                return;
+            }
+            
+            let savedCount = 0;
+            let errorCount = 0;
+            
+            for (const studentId of Object.keys(currentGrades)) {
+                try {
+                    const gradeData = {
+                        studentId: studentId,
+                        yearId: '1', // Demo year ID
+                        month: month,
+                        criteria: [
+                            { criterionId: '1', value: parseInt(currentGrades[studentId].involvement) || 1 },
+                            { criterionId: '2', value: parseInt(currentGrades[studentId].grammar) || 1 },
+                            { criterionId: '3', value: parseInt(currentGrades[studentId].reading) || 1 },
+                            { criterionId: '4', value: parseInt(currentGrades[studentId].speaking) || 1 },
+                            { criterionId: '5', value: parseInt(currentGrades[studentId].homework) || 1 }
+                        ],
+                        comment: currentGrades[studentId].comment || '',
+                        recommendations: '' // Можно добавить отдельное поле
+                    };
+
+                    const token = localStorage.getItem('token');
+                    if (token) {
+                        const response = await fetch(`${API_BASE}/grades`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${token}`
+                            },
+                            body: JSON.stringify(gradeData)
+                        });
+
+                        if (response.ok) {
+                            savedCount++;
+                        } else {
+                            errorCount++;
+                        }
+                    } else {
+                        // Демо режим
+                        savedCount++;
+                    }
+                } catch (error) {
+                    errorCount++;
+                    console.error(`Ошибка сохранения для ученика ${studentId}:`, error);
+                }
+            }
+            
+            if (errorCount === 0) {
+                showStatus(`Все оценки сохранены! (${savedCount} учеников)`, 'success');
+            } else {
+                showStatus(`Сохранено: ${savedCount}, ошибок: ${errorCount}`, 'error');
+            }
+        }
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('saveStatus');
+            statusDiv.textContent = message;
+            statusDiv.className = `save-status save-${type}`;
+            statusDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 3000);
+        }
+
+        // Функции для модальных окон и управления данными
+        function showAddStudentModal() {
+            populateStudentGroupSelect();
+            document.getElementById('addStudentModal').style.display = 'flex';
+        }
+
+        function hideAddStudentModal() {
+            document.getElementById('addStudentModal').style.display = 'none';
+            document.getElementById('newStudentName').value = '';
+            document.getElementById('newStudentGroup').value = '';
+            document.getElementById('newStudentNotes').value = '';
+            document.getElementById('addStudentError').style.display = 'none';
+        }
+
+        function showAddGroupModal() {
+            document.getElementById('addGroupModal').style.display = 'flex';
+        }
+
+        function hideAddGroupModal() {
+            document.getElementById('addGroupModal').style.display = 'none';
+            document.getElementById('newGroupName').value = '';
+            document.getElementById('newGroupDescription').value = '';
+            document.getElementById('addGroupError').style.display = 'none';
+        }
+
+        function validateFullName(name) {
+            const nameParts = name.trim().split(/\s+/);
+            return nameParts.length >= 2 && nameParts.every(part => part.length > 0);
+        }
+
+        async function addNewStudent() {
+            const name = document.getElementById('newStudentName').value.trim();
+            const group = document.getElementById('newStudentGroup').value;
+            const notes = document.getElementById('newStudentNotes').value.trim();
+            const errorDiv = document.getElementById('addStudentError');
+
+            // Валидация
+            if (!name || !group) {
+                errorDiv.textContent = 'ФИО и группа обязательны для заполнения';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            if (!validateFullName(name)) {
+                errorDiv.textContent = 'ФИО должно содержать как минимум имя и фамилию';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            // Проверка на дубликаты
+            if (demoStudents.some(s => s.fullName.toLowerCase() === name.toLowerCase())) {
+                errorDiv.textContent = 'Ученик с таким ФИО уже существует';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            try {
+                const newStudent = {
+                    id: Date.now().toString(),
+                    fullName: name,
+                    group: group,
+                    notes: notes
+                };
+
+                // Попытка сохранения через API
+                const token = localStorage.getItem('token');
+                if (token) {
+                    const response = await fetch(`${API_BASE}/students`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({
+                            fullName: name,
+                            group: group,
+                            notes: notes
+                        })
+                    });
+
+                    if (response.ok) {
+                        const savedStudent = await response.json();
+                        demoStudents.push(savedStudent);
+                    } else {
+                        demoStudents.push(newStudent);
+                    }
+                } else {
+                    demoStudents.push(newStudent);
+                }
+
+                hideAddStudentModal();
+                populateGroupSelect();
+                loadStudents();
+                showStatus(`Ученик "${name}" успешно добавлен!`, 'success');
+
+            } catch (error) {
+                errorDiv.textContent = 'Ошибка при добавлении ученика';
+                errorDiv.style.display = 'block';
+                console.error('Error adding student:', error);
+            }
+        }
+
+        async function addNewGroup() {
+            const groupName = document.getElementById('newGroupName').value.trim();
+            const description = document.getElementById('newGroupDescription').value.trim();
+            const errorDiv = document.getElementById('addGroupError');
+
+            // Валидация
+            if (!groupName) {
+                errorDiv.textContent = 'Название группы обязательно для заполнения';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            // Проверка на дубликаты
+            if (availableGroups.includes(groupName)) {
+                errorDiv.textContent = 'Группа с таким названием уже существует';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            try {
+                // Добавляем группу в список доступных
+                availableGroups.push(groupName);
+
+                hideAddGroupModal();
+                populateGroupSelect();
+                populateStudentGroupSelect();
+                showStatus(`Группа "${groupName}" успешно создана!`, 'success');
+
+            } catch (error) {
+                errorDiv.textContent = 'Ошибка при создании группы';
+                errorDiv.style.display = 'block';
+                console.error('Error adding group:', error);
+            }
+        }
+
+        function exportToExcel() {
+            const year = document.getElementById('yearSelect').value;
+            const month = document.getElementById('monthSelect').value;
+            const group = document.getElementById('groupSelect').value;
+            
+            if (!month) {
+                showStatus('Выберите месяц для экспорта!', 'error');
+                return;
+            }
+
+            // Создаем CSV данные
+            let csvContent = "ФИО,Группа,Вовлечённость,Грамматика,Чтение,Говорение,Выполнение ДЗ,Комментарий\n";
+            
+            students.forEach(student => {
+                const grades = currentGrades[student.id] || {};
+                csvContent += `"${student.fullName}","${student.group}",`;
+                csvContent += `"${grades.involvement || ''}","${grades.grammar || ''}",`;
+                csvContent += `"${grades.reading || ''}","${grades.speaking || ''}",`;
+                csvContent += `"${grades.homework || ''}","${grades.comment || ''}"\n`;
+            });
+
+            // Скачиваем файл
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', `Оценки_${group || 'Все_группы'}_${month}_${year}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            showStatus('Данные экспортированы в CSV файл!', 'success');
+        }
+
+        // Закрытие модальных окон по клику вне них
+        window.addEventListener('click', (event) => {
+            const studentModal = document.getElementById('addStudentModal');
+            const groupModal = document.getElementById('addGroupModal');
+            
+            if (event.target === studentModal) {
+                hideAddStudentModal();
+            }
+            if (event.target === groupModal) {
+                hideAddGroupModal();
+            }
+        });
+
+        // Инициализация при загрузке
+        window.addEventListener('load', () => {
+            populateGroupSelect();
+            loadStudents();
+        });
+
+        // Автосохранение каждые 30 секунд
+        setInterval(() => {
+            if (Object.keys(currentGrades).length > 0) {
+                console.log('Автосохранение данных...');
+                // saveAllGrades(); // Раскомментировать для автосохранения
+            }
+        }, 30000);
+    </script>
+</body>
+</html>

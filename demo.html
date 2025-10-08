@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ежемесячные отчёты по ученикам - Демо</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        
+        .header {
+            background-color: #2196F3;
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .login-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 80vh;
+        }
+        
+        .login-form {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 400px;
+        }
+        
+        .dashboard {
+            display: none;
+        }
+        
+        .card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 1rem;
+        }
+        
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: opacity 0.2s;
+        }
+        
+        .btn:hover {
+            opacity: 0.9;
+        }
+        
+        .btn-primary {
+            background-color: #2196F3;
+            color: white;
+        }
+        
+        .btn-success {
+            background-color: #4CAF50;
+            color: white;
+        }
+        
+        .btn-warning {
+            background-color: #FF9800;
+            color: white;
+        }
+        
+        .input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+            font-size: 1rem;
+        }
+        
+        .student-list {
+            display: grid;
+            gap: 1rem;
+        }
+        
+        .student-card {
+            background: white;
+            padding: 1rem;
+            border-radius: 4px;
+            border-left: 4px solid #2196F3;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .student-card:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .student-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #333;
+            margin: 0 0 0.5rem 0;
+        }
+        
+        .student-group {
+            color: #666;
+            margin: 0;
+            font-size: 0.9rem;
+        }
+        
+        .student-notes {
+            color: #888;
+            font-size: 0.85rem;
+            margin: 0.25rem 0 0 0;
+            font-style: italic;
+        }
+        
+        .grade-form {
+            display: grid;
+            gap: 1rem;
+        }
+        
+        .criteria-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr;
+            gap: 1rem;
+            align-items: center;
+            padding: 0.75rem;
+            background: #f9f9f9;
+            border-radius: 4px;
+        }
+        
+        .total-score {
+            background: #e3f2fd;
+            padding: 1rem;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 1.25rem;
+            font-weight: bold;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+        
+        .error {
+            color: #d32f2f;
+            background: #ffebee;
+            padding: 0.5rem;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+        
+        .success {
+            color: #2e7d32;
+            background: #e8f5e8;
+            padding: 0.5rem;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header" id="header" style="display: none;">
+        <h1 style="margin: 0;">Ежемесячные отчёты по ученикам</h1>
+        <div>
+            <span id="userName"></span>
+            <button class="btn btn-primary" onclick="logout()" style="margin-left: 1rem;">Выйти</button>
+        </div>
+    </div>
+
+    <!-- Login Page -->
+    <div class="login-container" id="loginPage">
+        <div class="login-form">
+            <h2 style="text-align: center; margin-bottom: 2rem;">Вход в систему</h2>
+            
+            <div id="loginError" class="error hidden"></div>
+            
+            <input type="email" id="email" class="input" placeholder="Email" value="teacher@demo.com">
+            <input type="password" id="password" class="input" placeholder="Пароль" value="demo123">
+            
+            <button class="btn btn-primary" onclick="login()" style="width: 100%;">Войти</button>
+            
+            <div style="margin-top: 1.5rem; padding: 1rem; background: #e3f2fd; border-radius: 4px; font-size: 0.875rem;">
+                <strong>Демо данные:</strong><br>
+                Email: teacher@demo.com<br>
+                Пароль: demo123
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard -->
+    <div class="dashboard" id="dashboard">
+        <div class="container">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                <h2 style="margin: 0;">Дашборд</h2>
+                <button class="btn btn-success" onclick="showAddStudent()">Добавить ученика</button>
+            </div>
+
+            <div class="grid-2">
+                <!-- Students List -->
+                <div>
+                    <h3>Список учеников</h3>
+                    <div id="studentsList" class="student-list">
+                        <!-- Students will be loaded here -->
+                    </div>
+                </div>
+
+                <!-- Student Details -->
+                <div>
+                    <div id="studentDetails" class="hidden">
+                        <h3>Информация об ученике</h3>
+                        <div class="card" id="studentInfo">
+                            <!-- Student info will be shown here -->
+                        </div>
+                        <button class="btn btn-warning" onclick="showGradeEntry()" style="width: 100%;">Выставить оценки</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Student Modal -->
+    <div id="addStudentModal" class="hidden" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000;">
+        <div style="background: white; padding: 2rem; border-radius: 8px; width: 100%; max-width: 500px;">
+            <h3>Добавить ученика</h3>
+            <div id="addStudentError" class="error hidden"></div>
+            <div style="margin-bottom: 0.5rem;">
+                <label style="display: block; margin-bottom: 0.25rem; font-weight: bold;">ФИО ученика *</label>
+                <input type="text" id="newStudentName" class="input" placeholder="Фамилия Имя Отчество (например: Иванов Иван Иванович)" style="border: 2px solid #ddd;">
+                <div style="font-size: 0.75rem; color: #666; margin-top: 0.25rem;">
+                    Введите полное ФИО ученика в формате: Фамилия Имя Отчество
+                </div>
+            </div>
+            <input type="text" id="newStudentGroup" class="input" placeholder="Группа (например: A1 Mon 18:00)">
+            <textarea id="newStudentNotes" class="input" placeholder="Заметки" rows="3"></textarea>
+            <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                <button class="btn" onclick="hideAddStudent()" style="background: #f5f5f5;">Отмена</button>
+                <button class="btn btn-success" onclick="addStudent()">Создать</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Grade Entry Modal -->
+    <div id="gradeModal" class="hidden" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000;">
+        <div style="background: white; padding: 2rem; border-radius: 8px; width: 100%; max-width: 800px; max-height: 90vh; overflow: auto;">
+            <h3 id="gradeModalTitle">Оценки</h3>
+            <div id="gradeError" class="error hidden"></div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
+                <select id="yearSelect" class="input">
+                    <option value="2024/2025">2024/2025</option>
+                </select>
+                <select id="monthSelect" class="input">
+                    <option value="Сентябрь">Сентябрь</option>
+                    <option value="Октябрь">Октябрь</option>
+                    <option value="Ноябрь">Ноябрь</option>
+                    <option value="Декабрь">Декабрь</option>
+                    <option value="Январь">Январь</option>
+                    <option value="Февраль">Февраль</option>
+                    <option value="Март">Март</option>
+                    <option value="Апрель">Апрель</option>
+                    <option value="Май">Май</option>
+                    <option value="Июнь">Июнь</option>
+                </select>
+            </div>
+
+            <h4>Критерии оценки</h4>
+            <div id="criteriaList" class="grade-form">
+                <!-- Criteria will be loaded here -->
+            </div>
+
+            <div class="total-score" id="totalScore">
+                Итоговая оценка: 0 (F)
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1.5rem 0;">
+                <input type="number" id="attendance" class="input" placeholder="Посещаемость (%)" min="0" max="100">
+                <input type="text" id="homework" class="input" placeholder="Домашнее задание">
+            </div>
+
+            <div style="display: grid; gap: 1rem; margin: 1.5rem 0;">
+                <div>
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: bold;">Общий комментарий</label>
+                    <textarea id="comment" class="input" placeholder="Общее впечатление о прогрессе ученика..." rows="3"></textarea>
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: bold;">Рекомендации</label>
+                    <textarea id="recommendations" class="input" placeholder="Рекомендации для улучшения обучения..." rows="3"></textarea>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
+                <button class="btn" onclick="hideGradeEntry()" style="background: #f5f5f5;">Отмена</button>
+                <button class="btn btn-success" onclick="saveGrade()">Сохранить оценки</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3001/api';
+        let currentUser = null;
+        let currentStudent = null;
+        let students = [];
+        let criteria = [
+            { id: '1', name: '🎭 Драматика / произношение', weight: 0.25, scale: '1-4' },
+            { id: '2', name: '🗣 Говорение / общение', weight: 0.25, scale: '1-4' },
+            { id: '3', name: '📝 Домашнее задание', weight: 0.25, scale: '1-4' },
+            { id: '4', name: '🚀 Вовлечённость и активность', weight: 0.25, scale: '1-4' }
+        ];
+
+        // Auth functions
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    currentUser = data.user;
+                    localStorage.setItem('token', data.token);
+                    showDashboard();
+                } else {
+                    const error = await response.json();
+                    showError('loginError', error.error || 'Ошибка входа');
+                }
+            } catch (err) {
+                showError('loginError', 'Ошибка соединения с сервером. Убедитесь, что backend запущен на localhost:3001');
+            }
+        }
+
+        function logout() {
+            currentUser = null;
+            localStorage.removeItem('token');
+            document.getElementById('loginPage').style.display = 'flex';
+            document.getElementById('dashboard').style.display = 'none';
+            document.getElementById('header').style.display = 'none';
+        }
+
+        function showDashboard() {
+            document.getElementById('loginPage').style.display = 'none';
+            document.getElementById('dashboard').style.display = 'block';
+            document.getElementById('header').style.display = 'flex';
+            document.getElementById('userName').textContent = `Добро пожаловать, ${currentUser.fullName}`;
+            loadStudents();
+        }
+
+        // Student functions
+        async function loadStudents() {
+            try {
+                const response = await fetch(`${API_BASE}/students`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                
+                if (response.ok) {
+                    students = await response.json();
+                    renderStudents();
+                } else {
+                    console.error('Failed to load students');
+                    // Show demo data if API fails
+                    students = [
+                        { id: '1', fullName: 'Иванов Иван Иванович', group: 'A1 Mon 18:00', notes: 'Активный ученик' },
+                        { id: '2', fullName: 'Петрова Мария Сергеевна', group: 'B1 Wed 19:00', notes: 'Хорошее произношение' }
+                    ];
+                    renderStudents();
+                }
+            } catch (err) {
+                console.error('Error loading students:', err);
+                // Show demo data
+                students = [
+                    { id: '1', fullName: 'Иванов Иван Иванович', group: 'A1 Mon 18:00', notes: 'Активный ученик' },
+                    { id: '2', fullName: 'Петрова Мария Сергеевна', group: 'B1 Wed 19:00', notes: 'Хорошее произношение' }
+                ];
+                renderStudents();
+            }
+        }
+
+        function renderStudents() {
+            const container = document.getElementById('studentsList');
+            container.innerHTML = students.map(student => `
+                <div class="student-card" onclick="selectStudent('${student.id}')">
+                    <div class="student-name">${student.fullName}</div>
+                    <div class="student-group">Группа: ${student.group}</div>
+                    ${student.notes ? `<div class="student-notes">${student.notes}</div>` : ''}
+                </div>
+            `).join('');
+        }
+
+        function selectStudent(studentId) {
+            currentStudent = students.find(s => s.id === studentId);
+            if (currentStudent) {
+                document.getElementById('studentDetails').classList.remove('hidden');
+                document.getElementById('studentInfo').innerHTML = `
+                    <p><strong>Имя:</strong> ${currentStudent.fullName}</p>
+                    <p><strong>Группа:</strong> ${currentStudent.group}</p>
+                    ${currentStudent.notes ? `<p><strong>Заметки:</strong> ${currentStudent.notes}</p>` : ''}
+                `;
+            }
+        }
+
+        // Modal functions
+        function showAddStudent() {
+            document.getElementById('addStudentModal').classList.remove('hidden');
+        }
+
+        function hideAddStudent() {
+            document.getElementById('addStudentModal').classList.add('hidden');
+            document.getElementById('newStudentName').value = '';
+            document.getElementById('newStudentGroup').value = '';
+            document.getElementById('newStudentNotes').value = '';
+        }
+
+        function validateFullName(name) {
+            const nameParts = name.trim().split(/\s+/);
+            return nameParts.length >= 2 && nameParts.every(part => part.length > 0);
+        }
+
+        async function addStudent() {
+            const name = document.getElementById('newStudentName').value;
+            const group = document.getElementById('newStudentGroup').value;
+            const notes = document.getElementById('newStudentNotes').value;
+
+            if (!name || !group) {
+                showError('addStudentError', 'ФИО и группа обязательны');
+                return;
+            }
+
+            if (!validateFullName(name)) {
+                showError('addStudentError', 'ФИО должно содержать как минимум имя и фамилию');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/students`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: JSON.stringify({ fullName: name, group, notes })
+                });
+
+                if (response.ok) {
+                    const student = await response.json();
+                    students.push(student);
+                    renderStudents();
+                    hideAddStudent();
+                    showSuccess('Ученик успешно добавлен!');
+                } else {
+                    const error = await response.json();
+                    showError('addStudentError', error.error || 'Ошибка при добавлении ученика');
+                }
+            } catch (err) {
+                // Demo mode - add to local array
+                const newStudent = {
+                    id: Date.now().toString(),
+                    fullName: name,
+                    group,
+                    notes
+                };
+                students.push(newStudent);
+                renderStudents();
+                hideAddStudent();
+                showSuccess('Ученик добавлен (демо режим)');
+            }
+        }
+
+        function showGradeEntry() {
+            if (!currentStudent) return;
+            
+            document.getElementById('gradeModal').classList.remove('hidden');
+            document.getElementById('gradeModalTitle').textContent = `Оценки для ${currentStudent.fullName}`;
+            
+            // Render criteria with level descriptions
+            const levelDescriptions = {
+                '1': {
+                    '🎭 Драматика / произношение': 'Частые ошибки, речь неразборчива',
+                    '🗣 Говорение / общение': 'Отвечает односложно или молчит',
+                    '📝 Домашнее задание': 'Не делает',
+                    '🚀 Вовлечённость и активность': 'Часто отвлекается, пассивен'
+                },
+                '2': {
+                    '🎭 Драматика / произношение': 'Иногда понятна, много неточностей',
+                    '🗣 Говорение / общение': 'Отвечает с подсказкой',
+                    '📝 Домашнее задание': 'Делает редко/частично',
+                    '🚀 Вовлечённость и активность': 'Иногда включается'
+                },
+                '3': {
+                    '🎭 Драматика / произношение': 'Понятная речь, небольшие ошибки',
+                    '🗣 Говорение / общение': 'Активно отвечает, иногда ошибается',
+                    '📝 Домашнее задание': 'Делает регулярно, но с ошибками',
+                    '🚀 Вовлечённость и активность': 'Вовлечён, активно участвует'
+                },
+                '4': {
+                    '🎭 Драматика / произношение': 'Чистое произношение, выразительная речь',
+                    '🗣 Говорение / общение': 'Говорит свободно, инициирует диалог',
+                    '📝 Домашнее задание': 'Делает всегда, качественно',
+                    '🚀 Вовлечённость и активность': 'Всегда включён, инициатива и энергия'
+                }
+            };
+
+            const container = document.getElementById('criteriaList');
+            container.innerHTML = criteria.map(criterion => `
+                <div style="background: #f9f9f9; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+                    <div style="display: grid; grid-template-columns: 2fr 100px; gap: 1rem; align-items: center; margin-bottom: 0.5rem;">
+                        <div>
+                            <strong style="font-size: 1.1rem;">${criterion.name}</strong>
+                            <div style="font-size: 0.875rem; color: #666;">
+                                Вес: ${criterion.weight} | Шкала: ${criterion.scale}
+                            </div>
+                        </div>
+                        <select id="grade_${criterion.id}" onchange="calculateTotal(); updateDescription('${criterion.id}', '${criterion.name}')" 
+                                style="padding: 0.75rem; border: 2px solid #ddd; border-radius: 6px; font-size: 1rem; text-align: center;">
+                            <option value="1">1 - Низкий</option>
+                            <option value="2">2 - Средний</option>
+                            <option value="3">3 - Хороший</option>
+                            <option value="4">4 - Отличный</option>
+                        </select>
+                    </div>
+                    <div id="description_${criterion.id}" style="font-size: 0.875rem; color: #555; font-style: italic; min-height: 1.2rem;">
+                        ${levelDescriptions['1'][criterion.name]}
+                    </div>
+                </div>
+            `).join('');
+            
+            calculateTotal();
+        }
+
+        function hideGradeEntry() {
+            document.getElementById('gradeModal').classList.add('hidden');
+        }
+
+        function updateDescription(criterionId, criterionName) {
+            const gradeSelect = document.getElementById(`grade_${criterionId}`);
+            const descriptionDiv = document.getElementById(`description_${criterionId}`);
+            
+            if (gradeSelect && descriptionDiv) {
+                const level = gradeSelect.value;
+                const levelDescriptions = {
+                    '1': {
+                        '🎭 Драматика / произношение': 'Частые ошибки, речь неразборчива',
+                        '🗣 Говорение / общение': 'Отвечает односложно или молчит',
+                        '📝 Домашнее задание': 'Не делает',
+                        '🚀 Вовлечённость и активность': 'Часто отвлекается, пассивен'
+                    },
+                    '2': {
+                        '🎭 Драматика / произношение': 'Иногда понятна, много неточностей',
+                        '🗣 Говорение / общение': 'Отвечает с подсказкой',
+                        '📝 Домашнее задание': 'Делает редко/частично',
+                        '🚀 Вовлечённость и активность': 'Иногда включается'
+                    },
+                    '3': {
+                        '🎭 Драматика / произношение': 'Понятная речь, небольшие ошибки',
+                        '🗣 Говорение / общение': 'Активно отвечает, иногда ошибается',
+                        '📝 Домашнее задание': 'Делает регулярно, но с ошибками',
+                        '🚀 Вовлечённость и активность': 'Вовлечён, активно участвует'
+                    },
+                    '4': {
+                        '🎭 Драматика / произношение': 'Чистое произношение, выразительная речь',
+                        '🗣 Говорение / общение': 'Говорит свободно, инициирует диалог',
+                        '📝 Домашнее задание': 'Делает всегда, качественно',
+                        '🚀 Вовлечённость и активность': 'Всегда включён, инициатива и энергия'
+                    }
+                };
+                
+                descriptionDiv.textContent = levelDescriptions[level][criterionName] || '';
+            }
+        }
+
+        function calculateTotal() {
+            let total = 0;
+            let totalWeight = 0;
+
+            criteria.forEach(criterion => {
+                const gradeSelect = document.getElementById(`grade_${criterion.id}`);
+                
+                if (gradeSelect) {
+                    const grade = parseFloat(gradeSelect.value) || 1;
+                    total += grade * criterion.weight;
+                    totalWeight += criterion.weight;
+                }
+            });
+
+            const finalScore = totalWeight > 0 ? total / totalWeight : 1;
+            let letter = 'F';
+            
+            // Adjusted for 1-4 scale
+            if (finalScore >= 3.5) letter = 'A (Отлично)';
+            else if (finalScore >= 2.5) letter = 'B (Хорошо)';
+            else if (finalScore >= 1.5) letter = 'C (Удовлетворительно)';
+            else letter = 'D (Неудовлетворительно)';
+
+            document.getElementById('totalScore').textContent = `Итоговая оценка: ${finalScore.toFixed(2)} из 4 (${letter})`;
+        }
+
+        async function saveGrade() {
+            if (!currentStudent) return;
+
+            const gradeData = {
+                studentId: currentStudent.id,
+                yearId: '1', // Demo year ID
+                month: document.getElementById('monthSelect').value,
+                criteria: criteria.map(criterion => ({
+                    criterionId: criterion.id,
+                    value: parseFloat(document.getElementById(`grade_${criterion.id}`).value) || 1
+                })),
+                attendance: document.getElementById('attendance').value ? parseFloat(document.getElementById('attendance').value) : undefined,
+                homework: document.getElementById('homework').value || undefined,
+                comment: document.getElementById('comment').value || undefined,
+                recommendations: document.getElementById('recommendations').value || undefined
+            };
+
+            try {
+                const response = await fetch(`${API_BASE}/grades`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: JSON.stringify(gradeData)
+                });
+
+                if (response.ok) {
+                    hideGradeEntry();
+                    showSuccess('Оценки успешно сохранены!');
+                } else {
+                    const error = await response.json();
+                    showError('gradeError', error.error || 'Ошибка при сохранении оценок');
+                }
+            } catch (err) {
+                hideGradeEntry();
+                showSuccess('Оценки сохранены (демо режим)');
+            }
+        }
+
+        // Utility functions
+        function showError(elementId, message) {
+            const errorDiv = document.getElementById(elementId);
+            errorDiv.textContent = message;
+            errorDiv.classList.remove('hidden');
+            setTimeout(() => errorDiv.classList.add('hidden'), 5000);
+        }
+
+        function showSuccess(message) {
+            const successDiv = document.createElement('div');
+            successDiv.className = 'success';
+            successDiv.textContent = message;
+            successDiv.style.position = 'fixed';
+            successDiv.style.top = '20px';
+            successDiv.style.right = '20px';
+            successDiv.style.zIndex = '2000';
+            successDiv.style.padding = '1rem';
+            successDiv.style.borderRadius = '4px';
+            document.body.appendChild(successDiv);
+            
+            setTimeout(() => {
+                document.body.removeChild(successDiv);
+            }, 3000);
+        }
+
+        // Initialize
+        window.addEventListener('load', () => {
+            const token = localStorage.getItem('token');
+            if (token) {
+                // Auto-login if token exists (simplified for demo)
+                currentUser = { fullName: 'Demo User', email: 'teacher@demo.com' };
+                showDashboard();
+            }
+        });
+    </script>
+</body>
+</html>
