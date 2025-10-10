@@ -33,7 +33,7 @@ interface Criterion {
 
 interface GradeData {
   [studentId: string]: {
-    [criterionId: string]: number;
+    [criterionId: string]: number | string;
     comment: string;
   };
 }
