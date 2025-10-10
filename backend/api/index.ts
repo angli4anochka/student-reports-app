@@ -13,44 +13,16 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  const { url } = req;
+  // All requests to /api go here
+  console.log('Request:', req.method, req.url);
 
-  // Route handling
-  if (url === '/api' || url === '/') {
-    return res.json({ 
-      message: 'Student Reports API is running!', 
-      version: '1.0.0',
-      timestamp: new Date().toISOString()
-    });
-  }
-
-  if (url === '/api/health') {
-    return res.json({ 
-      status: 'OK', 
-      timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV || 'production'
-    });
-  }
-
-  if (url === '/api/test' && req.method === 'POST') {
-    return res.json({ 
-      message: 'POST request working', 
-      body: req.body,
-      method: req.method
-    });
-  }
-
-  if (url === '/api/test-db') {
-    return res.json({ 
-      status: 'Database connection disabled for testing', 
-      dbUrl: process.env.DATABASE_URL ? 'Set' : 'Not set' 
-    });
-  }
-
-  // 404 handler
-  res.status(404).json({ 
-    error: 'Route not found', 
-    path: url,
-    availableRoutes: ['/api', '/api/health', '/api/test-db', '/api/test']
+  // Default API info
+  return res.json({ 
+    message: 'Student Reports API is running!', 
+    version: '1.0.0',
+    timestamp: new Date().toISOString(),
+    method: req.method,
+    url: req.url,
+    environment: process.env.NODE_ENV || 'production'
   });
 }
