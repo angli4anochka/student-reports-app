@@ -14,7 +14,7 @@
     "db:migrate:prod": "prisma migrate deploy",
     "db:seed": "ts-node src/seed.ts",
     "db:seed:prod": "NODE_ENV=production ts-node src/seed.ts",
-    "vercel-build": "npm run build && npm run db:migrate:prod && npm run db:seed:prod",
+    "vercel-build": "npm run db:generate",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
