@@ -3,11 +3,10 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
-const { PrismaClient } = require('@prisma/client');
 require('dotenv').config();
 
 const app = express();
-const prisma = new PrismaClient();
+// const prisma = new PrismaClient(); // Disabled for now
 
 // Middleware
 app.use(helmet({
@@ -32,13 +31,7 @@ app.get('/api/health', (req, res) => {
 
 // Test database connection
 app.get('/api/test-db', async (req, res) => {
-  try {
-    await prisma.$connect();
-    res.json({ status: 'Database connected successfully' });
-  } catch (error) {
-    console.error('Database connection error:', error);
-    res.status(500).json({ error: 'Database connection failed', message: error.message });
-  }
+  res.json({ status: 'Database connection disabled for testing', dbUrl: process.env.DATABASE_URL ? 'Set' : 'Not set' });
 });
 
 // Basic routes for testing
