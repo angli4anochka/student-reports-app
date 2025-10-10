@@ -6,15 +6,9 @@
     "start": "node dist/server.js",
     "start:prod": "NODE_ENV=production node dist/server.js",
     "dev": "nodemon src/server.ts",
-    "build": "npm run db:generate && tsc",
-    "build:js": "npm run db:generate && tsc --noEmitOnError false",
+    "build": "echo 'No build needed for Vercel serverless'",
+    "build:js": "echo 'No build needed for Vercel serverless'",
     "build:prod": "NODE_ENV=production npm run build",
-    "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev",
-    "db:migrate:prod": "prisma migrate deploy",
-    "db:seed": "ts-node src/seed.ts",
-    "db:seed:prod": "NODE_ENV=production ts-node src/seed.ts",
-    "vercel-build": "echo 'Skipping Prisma for now'",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -22,8 +16,6 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@prisma/client": "^6.17.0",
-    "@types/pg": "^8.15.5",
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
@@ -31,11 +23,7 @@
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.1",
-    "pg": "^8.16.3",
-    "prisma": "^6.17.0",
-    "sqlite3": "^5.1.7",
-    "uuid": "^13.0.0",
-    "vite": "^7.1.9"
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
