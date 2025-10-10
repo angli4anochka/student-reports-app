@@ -1,9 +1,10 @@
 // Vercel serverless function entry point
-const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
-const morgan = require('morgan');
-require('dotenv').config();
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import morgan from 'morgan';
+import dotenv from 'dotenv';
+dotenv.config();
 
 const app = express();
 // const prisma = new PrismaClient(); // Disabled for now
@@ -62,4 +63,4 @@ app.use('*', (req, res) => {
 });
 
 // Export for Vercel
-module.exports = app;
+export default app;
