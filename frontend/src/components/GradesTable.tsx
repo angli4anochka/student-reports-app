@@ -220,7 +220,7 @@ const GradesTable: React.FC = () => {
         const studentGrades = { ...gradesData[studentId], [criterionId]: value };
         const criteriaGrades = criteria.map(criterion => ({
           criterionId: criterion.id,
-          value: criterion.id === criterionId ? value : (studentGrades[criterion.id] || 1)
+          value: criterion.id === criterionId ? value : ((studentGrades[criterion.id] as number) || 1)
         }));
 
         const gradeData = {
@@ -253,7 +253,7 @@ const GradesTable: React.FC = () => {
         const studentGrades = { ...gradesData[studentId], comment };
         const criteriaGrades = criteria.map(criterion => ({
           criterionId: criterion.id,
-          value: studentGrades[criterion.id] || 1
+          value: (studentGrades[criterion.id] as number) || 1
         }));
 
         const gradeData = {
@@ -285,7 +285,7 @@ const GradesTable: React.FC = () => {
         const studentGrades = gradesData[studentId];
         const criteriaGrades = criteria.map(criterion => ({
           criterionId: criterion.id,
-          value: studentGrades[criterion.id] || 1
+          value: (studentGrades[criterion.id] as number) || 1
         }));
 
         const gradeData = {
