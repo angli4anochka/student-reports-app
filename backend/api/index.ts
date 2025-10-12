@@ -55,17 +55,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    // Test database connection if 'db' query parameter
+    if (req.url?.includes('db') || query.test === 'db' || query.db) {
+      console.log('Testing database connection...');
+      
+      try {
+        await prisma.$connect();
+        let userCount = 0;
+        let connectionTest = true;
+        
+        try {
+          userCount = await prisma.user.count();
+        } catch (err) {
+          console.log('Tables not created yet');
+        }
+        
+        return res.json({
+          status: 'SUCCESS: Database connected!',
+          userCount,
+          dbConfigured: !!process.env.DATABASE_URL,
+          timestamp: new Date().toISOString(),
+          message: 'Supabase PostgreSQL connection working!'
+        });
+        
+      } catch (error) {
+        return res.json({
+          status: 'ERROR: Database connection failed',
+          error: error instanceof Error ? error.message : 'Unknown error',
+          dbConfigured: !!process.env.DATABASE_URL,
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+
     // Default API info
     return res.json({ 
       message: 'Student Reports API is running!', 
-      version: '3.0.0',
+      version: '4.0.0',
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV || 'production',
-      testEndpoints: [
-        '/api?check=health',
-        '/api?test=db'
-      ],
-      deploymentCheck: 'Force update 3.0.0 - ' + Date.now()
+      testDatabase: 'Add ?db to URL to test database connection',
+      deploymentCheck: 'Database test integrated - ' + Date.now()
     });
 
   } catch (error) {
