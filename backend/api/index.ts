@@ -1,7 +1,9 @@
 // Vercel serverless function entry point
 import { VercelRequest, VercelResponse } from '@vercel/node';
+import { PrismaClient } from '@prisma/client';
 
-// Prisma will be enabled later after schema is properly set up
+// Initialize Prisma client
+const prisma = new PrismaClient();
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Set CORS headers
@@ -21,9 +23,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     // Test database connection with query parameter
     if (query.test === 'db') {
+      await prisma.$connect();
+      console.log('Database connected');
+      
+      let userCount = 0;
+      let tablesExist = false;
+      
+      try {
+        userCount = await prisma.user.count();
+        tablesExist = true;
+      } catch (error) {
+        console.log('Tables not created yet, need migrations');
+      }
+
       return res.json({ 
-        status: 'Database connection disabled temporarily', 
-        reason: 'Setting up Prisma schema',
+        status: 'Database connected successfully!', 
+        userCount,
+        tablesExist,
         dbUrl: process.env.DATABASE_URL ? 'Set' : 'Not set',
         timestamp: new Date().toISOString()
       });
