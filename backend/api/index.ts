@@ -17,28 +17,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  const { url } = req;
-  console.log('Request:', req.method, url);
+  const { query } = req;
+  console.log('Request:', req.method, req.url, 'Query:', query);
 
   try {
-    // Test database connection
-    if (url === '/api/test-db') {
+    // Test database connection with query parameter
+    if (query.test === 'db') {
       await prisma.$connect();
-      const userCount = await prisma.user.count();
+      console.log('Database connected');
+      
+      let userCount = 0;
+      let tablesExist = false;
+      
+      try {
+        userCount = await prisma.user.count();
+        tablesExist = true;
+      } catch (error) {
+        console.log('Tables not created yet, need migrations');
+      }
+
       return res.json({ 
         status: 'Database connected successfully!', 
         userCount,
-        dbUrl: process.env.DATABASE_URL ? 'Set' : 'Not set' 
+        tablesExist,
+        dbUrl: process.env.DATABASE_URL ? 'Set' : 'Not set',
+        timestamp: new Date().toISOString()
       });
     }
 
-    // Health check
-    if (url === '/api/health') {
+    // Health check with query parameter
+    if (query.check === 'health') {
       return res.json({ 
         status: 'OK', 
         timestamp: new Date().toISOString(),
         environment: process.env.NODE_ENV || 'production',
-        database: 'Connected'
+        database: process.env.DATABASE_URL ? 'Configured' : 'Not configured'
       });
     }
 
@@ -48,14 +61,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       version: '1.0.0',
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV || 'production',
-      availableEndpoints: ['/api/health', '/api/test-db']
+      testEndpoints: [
+        '/api?check=health',
+        '/api?test=db'
+      ]
     });
 
   } catch (error) {
-    console.error('Database error:', error);
+    console.error('API Error:', error);
     return res.status(500).json({ 
-      error: 'Database connection failed',
-      message: error instanceof Error ? error.message : 'Unknown error'
+      error: 'API error',
+      message: error instanceof Error ? error.message : 'Unknown error',
+      dbUrl: process.env.DATABASE_URL ? 'Set' : 'Not set'
     });
   } finally {
     await prisma.$disconnect();
