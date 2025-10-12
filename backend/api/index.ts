@@ -58,14 +58,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Default API info
     return res.json({ 
       message: 'Student Reports API is running!', 
-      version: '2.0.0',
+      version: '3.0.0',
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV || 'production',
       testEndpoints: [
         '/api?check=health',
         '/api?test=db'
       ],
-      deploymentCheck: 'Updated version 2.0.0'
+      deploymentCheck: 'Force update 3.0.0 - ' + Date.now()
     });
 
   } catch (error) {
