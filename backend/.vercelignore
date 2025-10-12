@@ -1,7 +1,0 @@
-prisma/
-*.prisma
-migrations/
-*.db
-node_modules/
-src/
-tsconfig.json
