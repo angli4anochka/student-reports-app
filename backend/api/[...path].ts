@@ -90,16 +90,23 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Set CORS headers explicitly for preflight
   const origin = req.headers.origin;
+
+  console.log('Catch-all handler:', req.method, req.url, 'Origin:', origin);
+
   if (origin && (origin.includes('.vercel.app') || origin.includes('localhost'))) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', '*');
   }
 
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.setHeader('Access-Control-Max-Age', '86400');
 
   // Handle OPTIONS preflight
   if (req.method === 'OPTIONS') {
+    console.log('OPTIONS preflight handled');
     res.status(200).end();
     return;
   }
