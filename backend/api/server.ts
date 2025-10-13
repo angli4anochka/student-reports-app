@@ -20,12 +20,21 @@ const prisma = new PrismaClient();
 
 // Configure CORS for Vercel
 app.use(cors({
-  origin: [
-    'https://student-reports-app.vercel.app',
-    'http://localhost:5173',
-    'http://localhost:5174',
-    /\.vercel\.app$/  // Allow all Vercel preview deployments
-  ],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+
+    // Allow all Vercel deployments and localhost
+    if (
+      origin.includes('.vercel.app') ||
+      origin.includes('localhost')
+    ) {
+      return callback(null, true);
+    }
+
+    // Block other origins
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
