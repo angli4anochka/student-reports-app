@@ -1,13 +1,82 @@
-// Vercel serverless function entry point
+// Universal Vercel serverless handler for ALL API routes
 import { VercelRequest, VercelResponse } from '@vercel/node';
+import express from 'express';
+import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
 
-// Initialize Prisma client
+import authRoutes from '../src/routes/auth';
+import studentRoutes from '../src/routes/students';
+import gradeRoutes from '../src/routes/grades';
+import criteriaRoutes from '../src/routes/criteria';
+import yearRoutes from '../src/routes/years';
+import groupRoutes from '../src/routes/groups';
+import exportRoutes from '../src/routes/export';
+import importRoutes from '../src/routes/import';
+
+// Initialize Express app
+const app = express();
 const prisma = new PrismaClient();
 
+// CORS configuration
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+    if (origin.includes('.vercel.app') || origin.includes('localhost')) {
+      return callback(null, true);
+    }
+    callback(null, false);
+  },
+  credentials: true
+}));
+
+app.use(express.json({ limit: '50mb' }));
+
+// Mount all routes
+app.use('/api/auth', authRoutes);
+app.use('/api/students', studentRoutes);
+app.use('/api/grades', gradeRoutes);
+app.use('/api/criteria', criteriaRoutes);
+app.use('/api/years', yearRoutes);
+app.use('/api/groups', groupRoutes);
+app.use('/api/export', exportRoutes);
+app.use('/api/import', importRoutes);
+
+// Health endpoint
+app.get('/api', (req, res) => {
+  res.json({
+    message: 'Student Reports API is running!',
+    version: '5.0.0',
+    timestamp: new Date().toISOString(),
+    cors: 'enabled'
+  });
+});
+
+// Database test endpoint
+app.get('/api/db', async (req, res) => {
+  try {
+    await prisma.$connect();
+    const userCount = await prisma.user.count();
+    res.json({
+      status: 'SUCCESS: Database connected!',
+      userCount,
+      timestamp: new Date().toISOString(),
+      message: 'Supabase PostgreSQL connection working!'
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'ERROR: Database connection failed',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Vercel serverless handler
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Set CORS headers for all Vercel deployments
   const origin = req.headers.origin;
+
+  console.log('Handler:', req.method, req.url, 'Origin:', origin);
+
+  // Set CORS headers
   if (origin && (origin.includes('.vercel.app') || origin.includes('localhost'))) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -19,99 +88,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
   res.setHeader('Access-Control-Max-Age', '86400');
 
-  // Handle preflight requests
+  // Handle preflight
   if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
+    console.log('OPTIONS preflight handled');
+    return res.status(200).end();
   }
 
-  const { query } = req;
-  console.log('Request:', req.method, req.url, 'Query:', query);
-
-  try {
-    // Test database connection with query parameter
-    if (query.test === 'db') {
-      await prisma.$connect();
-      console.log('Database connected');
-      
-      let userCount = 0;
-      let tablesExist = false;
-      
-      try {
-        userCount = await prisma.user.count();
-        tablesExist = true;
-      } catch (error) {
-        console.log('Tables not created yet, need migrations');
+  // Pass to Express
+  return new Promise((resolve, reject) => {
+    app(req as any, res as any, (err: any) => {
+      if (err) {
+        console.error('Express error:', err);
+        reject(err);
+      } else {
+        resolve(undefined);
       }
-
-      return res.json({ 
-        status: 'Database connected successfully!', 
-        userCount,
-        tablesExist,
-        dbUrl: process.env.DATABASE_URL ? 'Set' : 'Not set',
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    // Health check with query parameter
-    if (query.check === 'health') {
-      return res.json({ 
-        status: 'OK', 
-        timestamp: new Date().toISOString(),
-        environment: process.env.NODE_ENV || 'production',
-        database: process.env.DATABASE_URL ? 'Configured' : 'Not configured'
-      });
-    }
-
-    // Test database connection if 'db' query parameter
-    if (req.url?.includes('db') || query.test === 'db' || query.db) {
-      console.log('Testing database connection...');
-      
-      try {
-        await prisma.$connect();
-        let userCount = 0;
-        let connectionTest = true;
-        
-        try {
-          userCount = await prisma.user.count();
-        } catch (err) {
-          console.log('Tables not created yet');
-        }
-        
-        return res.json({
-          status: 'SUCCESS: Database connected!',
-          userCount,
-          dbConfigured: !!process.env.DATABASE_URL,
-          timestamp: new Date().toISOString(),
-          message: 'Supabase PostgreSQL connection working!'
-        });
-        
-      } catch (error) {
-        return res.json({
-          status: 'ERROR: Database connection failed',
-          error: error instanceof Error ? error.message : 'Unknown error',
-          dbConfigured: !!process.env.DATABASE_URL,
-          timestamp: new Date().toISOString()
-        });
-      }
-    }
-
-    // Default API info
-    return res.json({ 
-      message: 'Student Reports API is running!', 
-      version: '4.0.0',
-      timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV || 'production',
-      testDatabase: 'Add ?db to URL to test database connection',
-      deploymentCheck: 'Database test integrated - ' + Date.now()
     });
-
-  } catch (error) {
-    console.error('API Error:', error);
-    return res.status(500).json({ 
-      error: 'API error',
-      message: error instanceof Error ? error.message : 'Unknown error',
-      dbUrl: process.env.DATABASE_URL ? 'Set' : 'Not set'
-    });
-  }
+  });
 }
+
+export { app, prisma };
