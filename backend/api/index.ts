@@ -1,80 +1,14 @@
-// Universal Vercel serverless handler for ALL API routes
+// Simple Vercel serverless handler
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import express from 'express';
-import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 
-import authRoutes from '../src/routes/auth';
-import studentRoutes from '../src/routes/students';
-import gradeRoutes from '../src/routes/grades';
-import criteriaRoutes from '../src/routes/criteria';
-import yearRoutes from '../src/routes/years';
-import groupRoutes from '../src/routes/groups';
-import exportRoutes from '../src/routes/export';
-import importRoutes from '../src/routes/import';
-
-// Initialize Express app
-const app = express();
 const prisma = new PrismaClient();
+const JWT_SECRET = process.env.JWT_SECRET || 'default-secret';
 
-// CORS configuration
-app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin) return callback(null, true);
-    if (origin.includes('.vercel.app') || origin.includes('localhost')) {
-      return callback(null, true);
-    }
-    callback(null, false);
-  },
-  credentials: true
-}));
-
-app.use(express.json({ limit: '50mb' }));
-
-// Mount all routes
-app.use('/api/auth', authRoutes);
-app.use('/api/students', studentRoutes);
-app.use('/api/grades', gradeRoutes);
-app.use('/api/criteria', criteriaRoutes);
-app.use('/api/years', yearRoutes);
-app.use('/api/groups', groupRoutes);
-app.use('/api/export', exportRoutes);
-app.use('/api/import', importRoutes);
-
-// Health endpoint
-app.get('/api', (req, res) => {
-  res.json({
-    message: 'Student Reports API is running!',
-    version: '5.0.0',
-    timestamp: new Date().toISOString(),
-    cors: 'enabled'
-  });
-});
-
-// Database test endpoint
-app.get('/api/db', async (req, res) => {
-  try {
-    await prisma.$connect();
-    const userCount = await prisma.user.count();
-    res.json({
-      status: 'SUCCESS: Database connected!',
-      userCount,
-      timestamp: new Date().toISOString(),
-      message: 'Supabase PostgreSQL connection working!'
-    });
-  } catch (error) {
-    res.status(500).json({
-      status: 'ERROR: Database connection failed',
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
-});
-
-// Vercel serverless handler
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const origin = req.headers.origin;
-
-  console.log('Handler:', req.method, req.url, 'Origin:', origin);
 
   // Set CORS headers
   if (origin && (origin.includes('.vercel.app') || origin.includes('localhost'))) {
@@ -90,21 +24,90 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // Handle preflight
   if (req.method === 'OPTIONS') {
-    console.log('OPTIONS preflight handled');
     return res.status(200).end();
   }
 
-  // Pass to Express
-  return new Promise((resolve, reject) => {
-    app(req as any, res as any, (err: any) => {
-      if (err) {
-        console.error('Express error:', err);
-        reject(err);
-      } else {
-        resolve(undefined);
-      }
-    });
-  });
-}
+  const path = req.url || '/';
+  console.log('Request:', req.method, path);
 
-export { app, prisma };
+  try {
+    // Root endpoint
+    if (path === '/api' || path === '/api/') {
+      return res.json({
+        message: 'Student Reports API',
+        version: '6.0.0',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Health check
+    if (path === '/api/health') {
+      return res.json({
+        status: 'OK',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Database test
+    if (path === '/api/db' || path.includes('?db')) {
+      const userCount = await prisma.user.count();
+      return res.json({
+        status: 'Database connected',
+        userCount,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Login endpoint
+    if (path === '/api/auth/login' && req.method === 'POST') {
+      const { email, password } = req.body;
+
+      if (!email || !password) {
+        return res.status(400).json({ error: 'Email and password required' });
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { email },
+        select: {
+          id: true,
+          email: true,
+          fullName: true,
+          role: true,
+          password: true
+        }
+      });
+
+      if (!user) {
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
+
+      const isValid = await bcrypt.compare(password, user.password);
+      if (!isValid) {
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
+
+      const token = jwt.sign(
+        { userId: user.id, email: user.email, role: user.role },
+        JWT_SECRET,
+        { expiresIn: '24h' }
+      );
+
+      const { password: _, ...userWithoutPassword } = user;
+
+      return res.json({
+        token,
+        user: userWithoutPassword
+      });
+    }
+
+    // Not found
+    return res.status(404).json({ error: 'Not found', path });
+
+  } catch (error) {
+    console.error('Error:', error);
+    return res.status(500).json({
+      error: 'Internal server error',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+}
