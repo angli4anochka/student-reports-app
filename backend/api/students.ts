@@ -28,9 +28,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const user = verifyToken(req);
-    const slug = req.query.slug as string[] | undefined;
-    const id = slug?.[0];
-    const subpath = slug?.[1];
+    const id = req.query.id as string | undefined;
+    const action = req.query.action as string | undefined;
 
     // GET /students - list students
     if (!id && req.method === 'GET') {
@@ -68,7 +67,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!id) return res.status(400).json({ error: 'Student ID required' });
 
     // GET /students/{id}/grades
-    if (subpath === 'grades' && req.method === 'GET') {
+    if (action === 'grades' && req.method === 'GET') {
       const { yearId, month } = req.query;
       const where: any = { studentId: id };
       if (yearId) where.yearId = yearId;

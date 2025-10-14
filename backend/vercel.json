@@ -7,6 +7,14 @@
       "maxDuration": 10
     }
   },
+  "rewrites": [
+    { "source": "/api/groups/:id", "destination": "/api/groups?id=:id" },
+    { "source": "/api/groups/:id/:action", "destination": "/api/groups?id=:id&action=:action" },
+    { "source": "/api/students/:id", "destination": "/api/students?id=:id" },
+    { "source": "/api/students/:id/:action", "destination": "/api/students?id=:id&action=:action" },
+    { "source": "/api/grades/:id", "destination": "/api/grades?id=:id" },
+    { "source": "/api/criteria/:id", "destination": "/api/criteria?id=:id" }
+  ],
   "headers": [
     {
       "source": "/api/(.*)",

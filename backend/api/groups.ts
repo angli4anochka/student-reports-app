@@ -28,8 +28,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const user = verifyToken(req);
-    const slug = req.query.slug as string[] | undefined;
-    const id = slug?.[0];
+    const id = req.query.id as string | undefined;
 
     // GET /groups - list all groups
     if (!id && req.method === 'GET') {

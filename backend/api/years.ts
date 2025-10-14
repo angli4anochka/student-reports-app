@@ -28,10 +28,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const user = verifyToken(req);
-    const slug = req.query.slug as string[] | undefined;
+    const id = req.query.id as string | undefined;
 
     // GET /years - list all years
-    if (!slug && req.method === 'GET') {
+    if (!id && req.method === 'GET') {
       const years = await prisma.year.findMany({
         orderBy: { year: 'desc' }
       });
@@ -39,7 +39,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // POST /years - create new year
-    if (!slug && req.method === 'POST') {
+    if (!id && req.method === 'POST') {
       const { year, months } = req.body;
       if (!year) return res.status(400).json({ error: 'Year is required' });
       const newYear = await prisma.year.create({
