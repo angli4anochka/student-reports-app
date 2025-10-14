@@ -50,6 +50,7 @@ class ApiService {
     const response = await this.request<{ token: string; user: any }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
+
     });
     
     this.setToken(response.token);

@@ -70,14 +70,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         const lessonId = randomUUID();
-        const now = new Date().toISOString();
         const finalGroupId = groupId && groupId !== '' ? groupId : null;
 
         console.log('Inserting lesson with ID:', lessonId, 'groupId:', finalGroupId);
 
         await prisma.$executeRaw`
           INSERT INTO lessons (id, date, topic, homework, comment, "teacherId", "groupId", "createdAt", "updatedAt")
-          VALUES (${lessonId}, ${date}, ${topic}, ${homework || ''}, ${comment || ''}, ${user.userId}, ${finalGroupId}, ${now}, ${now})
+          VALUES (${lessonId}, ${date}, ${topic}, ${homework || ''}, ${comment || ''}, ${user.userId}, ${finalGroupId}, NOW(), NOW())
         `;
 
         console.log('Lesson inserted, fetching result');
@@ -116,13 +115,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (req.method === 'PUT') {
       const { date, topic, homework, comment, groupId } = req.body;
-      const now = new Date().toISOString();
       const finalGroupId = groupId && groupId !== '' ? groupId : null;
 
       await prisma.$executeRaw`
         UPDATE lessons
         SET date = ${date}, topic = ${topic}, homework = ${homework}, comment = ${comment},
-            "groupId" = ${finalGroupId}, "updatedAt" = ${now}
+            "groupId" = ${finalGroupId}, "updatedAt" = NOW()
         WHERE id = ${id}
       `;
 
