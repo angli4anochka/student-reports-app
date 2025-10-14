@@ -49,7 +49,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       const newYear = await prisma.year.create({
-        data: { year, months: months || [] }
+        data: { year, months: months || [], teacherId: user.userId }
       });
 
       return res.status(201).json(newYear);

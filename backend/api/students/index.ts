@@ -63,7 +63,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       const student = await prisma.student.create({
-        data: { fullName, groupId, notes },
+        data: { fullName, groupId, notes, teacherId: user.userId },
         include: { group: true }
       });
 

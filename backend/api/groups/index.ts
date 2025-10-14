@@ -54,7 +54,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       const group = await prisma.group.create({
-        data: { name, description }
+        data: { name, description, teacherId: user.userId }
       });
 
       return res.status(201).json(group);
