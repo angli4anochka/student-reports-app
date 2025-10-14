@@ -1,4 +1,3 @@
-// Simple Vercel serverless handler
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
@@ -10,7 +9,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'default-secret';
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const origin = req.headers.origin;
 
-  // Set CORS headers
+  // CORS headers
   if (origin && (origin.includes('.vercel.app') || origin.includes('localhost'))) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -22,25 +21,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
   res.setHeader('Access-Control-Max-Age', '86400');
 
-  // Handle preflight
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  // Extract path, removing query params
-  const fullUrl = req.url || '/';
-  const path = fullUrl.split('?')[0];
-
-  // Get the actual path from query params if exists (from Vercel rewrites)
-  const urlParams = new URLSearchParams(fullUrl.split('?')[1] || '');
+  // Extract actual path from Vercel rewrites
+  const urlParams = new URLSearchParams((req.url || '').split('?')[1] || '');
   const rewritePath = urlParams.get('path');
-  const actualPath = rewritePath ? `/api/${rewritePath}` : path;
-
-  console.log('Request:', req.method, fullUrl, 'Actual path:', actualPath);
+  const actualPath = rewritePath ? `/api/${rewritePath}` : (req.url || '').split('?')[0];
 
   try {
-    // Root endpoint
-    if (actualPath === '/api' || actualPath === '/api/' || path === '/api' || path === '/api/') {
+    // Root
+    if (actualPath === '/api' || actualPath === '/api/') {
       return res.json({
         message: 'Student Reports API',
         version: '6.0.0',
@@ -48,25 +40,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Health check
-    if (actualPath === '/api/health' || actualPath.includes('/health')) {
-      return res.json({
-        status: 'OK',
-        timestamp: new Date().toISOString()
-      });
+    // Health
+    if (actualPath.includes('/health')) {
+      return res.json({ status: 'OK', timestamp: new Date().toISOString() });
     }
 
     // Database test
-    if (actualPath === '/api/db' || actualPath === '/api/test-db' || actualPath.includes('/db')) {
+    if (actualPath.includes('/db') || actualPath.includes('/test-db')) {
       const userCount = await prisma.user.count();
-      return res.json({
-        status: 'Database connected',
-        userCount,
-        timestamp: new Date().toISOString()
-      });
+      return res.json({ status: 'Database connected', userCount, timestamp: new Date().toISOString() });
     }
 
-    // Login endpoint
+    // Login
     if (actualPath === '/api/auth/login' && req.method === 'POST') {
       const { email, password } = req.body;
 
@@ -76,21 +61,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const user = await prisma.user.findUnique({
         where: { email },
-        select: {
-          id: true,
-          email: true,
-          fullName: true,
-          role: true,
-          password: true
-        }
+        select: { id: true, email: true, fullName: true, role: true, password: true }
       });
 
-      if (!user) {
-        return res.status(401).json({ error: 'Invalid credentials' });
-      }
-
-      const isValid = await bcrypt.compare(password, user.password);
-      if (!isValid) {
+      if (!user || !await bcrypt.compare(password, user.password)) {
         return res.status(401).json({ error: 'Invalid credentials' });
       }
 
@@ -101,15 +75,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       );
 
       const { password: _, ...userWithoutPassword } = user;
-
-      return res.json({
-        token,
-        user: userWithoutPassword
-      });
+      return res.json({ token, user: userWithoutPassword });
     }
 
-    // Not found
-    return res.status(404).json({ error: 'Not found', path, actualPath });
+    return res.status(404).json({ error: 'Not found' });
 
   } catch (error) {
     console.error('Error:', error);
