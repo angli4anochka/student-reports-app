@@ -33,16 +33,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // GET /lessons - list lessons with filters
     if (!id && req.method === 'GET') {
       const { groupId } = req.query;
-      const where: any = { teacherId: user.userId };
-      if (groupId) where.groupId = groupId;
 
-      const lessons = await prisma.lesson.findMany({
-        where,
-        include: {
-          group: true
-        },
-        orderBy: { date: 'desc' }
-      });
+      let lessons;
+      if (groupId) {
+        lessons = await prisma.$queryRaw`
+          SELECT l.*,
+                 jsonb_build_object('id', g.id, 'name', g.name, 'description', g.description) as group
+          FROM lessons l
+          LEFT JOIN groups g ON l."groupId" = g.id
+          WHERE l."teacherId" = ${user.userId} AND l."groupId" = ${groupId}
+          ORDER BY l.date DESC
+        `;
+      } else {
+        lessons = await prisma.$queryRaw`
+          SELECT l.*,
+                 jsonb_build_object('id', g.id, 'name', g.name, 'description', g.description) as group
+          FROM lessons l
+          LEFT JOIN groups g ON l."groupId" = g.id
+          WHERE l."teacherId" = ${user.userId}
+          ORDER BY l.date DESC
+        `;
+      }
+
       return res.json(lessons);
     }
 
@@ -52,55 +64,66 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!date || !topic) {
         return res.status(400).json({ error: 'Date and topic are required' });
       }
-      const lesson = await prisma.lesson.create({
-        data: {
-          date,
-          topic,
-          homework: homework || '',
-          comment: comment || '',
-          teacherId: user.userId,
-          groupId: groupId || null
-        },
-        include: {
-          group: true
-        }
-      });
-      return res.status(201).json(lesson);
+
+      const lessonId = crypto.randomUUID();
+      const now = new Date().toISOString();
+
+      await prisma.$executeRaw`
+        INSERT INTO lessons (id, date, topic, homework, comment, "teacherId", "groupId", "createdAt", "updatedAt")
+        VALUES (${lessonId}, ${date}, ${topic}, ${homework || ''}, ${comment || ''}, ${user.userId}, ${groupId || null}, ${now}, ${now})
+      `;
+
+      const lesson = await prisma.$queryRaw`
+        SELECT l.*,
+               jsonb_build_object('id', g.id, 'name', g.name, 'description', g.description) as group
+        FROM lessons l
+        LEFT JOIN groups g ON l."groupId" = g.id
+        WHERE l.id = ${lessonId}
+      `;
+
+      return res.status(201).json((lesson as any[])[0]);
     }
 
     if (!id) return res.status(400).json({ error: 'Lesson ID required' });
 
     if (req.method === 'GET') {
-      const lesson = await prisma.lesson.findUnique({
-        where: { id },
-        include: {
-          group: true
-        }
-      });
-      if (!lesson) return res.status(404).json({ error: 'Lesson not found' });
-      return res.json(lesson);
+      const lesson = await prisma.$queryRaw`
+        SELECT l.*,
+               jsonb_build_object('id', g.id, 'name', g.name, 'description', g.description) as group
+        FROM lessons l
+        LEFT JOIN groups g ON l."groupId" = g.id
+        WHERE l.id = ${id}
+      `;
+      if (!lesson || (lesson as any[]).length === 0) {
+        return res.status(404).json({ error: 'Lesson not found' });
+      }
+      return res.json((lesson as any[])[0]);
     }
 
     if (req.method === 'PUT') {
       const { date, topic, homework, comment, groupId } = req.body;
-      const lesson = await prisma.lesson.update({
-        where: { id },
-        data: {
-          date,
-          topic,
-          homework,
-          comment,
-          groupId: groupId || null
-        },
-        include: {
-          group: true
-        }
-      });
-      return res.json(lesson);
+      const now = new Date().toISOString();
+
+      await prisma.$executeRaw`
+        UPDATE lessons
+        SET date = ${date}, topic = ${topic}, homework = ${homework}, comment = ${comment},
+            "groupId" = ${groupId || null}, "updatedAt" = ${now}
+        WHERE id = ${id}
+      `;
+
+      const lesson = await prisma.$queryRaw`
+        SELECT l.*,
+               jsonb_build_object('id', g.id, 'name', g.name, 'description', g.description) as group
+        FROM lessons l
+        LEFT JOIN groups g ON l."groupId" = g.id
+        WHERE l.id = ${id}
+      `;
+
+      return res.json((lesson as any[])[0]);
     }
 
     if (req.method === 'DELETE') {
-      await prisma.lesson.delete({ where: { id } });
+      await prisma.$executeRaw`DELETE FROM lessons WHERE id = ${id}`;
       return res.status(204).end();
     }
 
