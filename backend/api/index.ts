@@ -45,18 +45,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Health
-    if (actualPath.includes('/health')) {
+    if (actualPath.includes('health')) {
       return res.json({ status: 'OK', timestamp: new Date().toISOString() });
     }
 
     // Database test
-    if (actualPath.includes('/db') || actualPath.includes('/test-db')) {
+    if (actualPath.includes('db') || actualPath.includes('test-db')) {
       const userCount = await prisma.user.count();
       return res.json({ status: 'Database connected', userCount, timestamp: new Date().toISOString() });
     }
 
     // Login
-    if (actualPath === '/api/auth/login' && req.method === 'POST') {
+    if (actualPath.includes('auth/login') && req.method === 'POST') {
       const { email, password } = req.body;
 
       if (!email || !password) {
@@ -82,7 +82,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.json({ token, user: userWithoutPassword });
     }
 
-    return res.status(404).json({ error: 'Not found' });
+    return res.status(404).json({ error: 'Not found', path: actualPath, url: req.url });
 
   } catch (error) {
     console.error('Error:', error);
