@@ -21,15 +21,74 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader('Access-Control-Allow-Origin', '*');
   }
 
-  res.setHeader('Access-Control-Allow-Methods', 'GET, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
     const user = verifyToken(req);
-    const path = req.query.path as string[];
-    const id = path?.[0];
+    const slug = req.query.slug as string[] | undefined;
+    const id = slug?.[0];
+
+    // GET /grades - list grades with filters
+    if (!id && req.method === 'GET') {
+      const { studentId, yearId, month } = req.query;
+      const where: any = {};
+      if (studentId) where.studentId = studentId;
+      if (yearId) where.yearId = yearId;
+      if (month) where.month = month;
+
+      const grades = await prisma.grade.findMany({
+        where,
+        include: {
+          student: true,
+          year: true,
+          criteriaGrades: { include: { criterion: true } }
+        },
+        orderBy: [{ year: { year: 'desc' } }, { month: 'asc' }]
+      });
+      return res.json(grades);
+    }
+
+    // POST /grades - create grade
+    if (!id && req.method === 'POST') {
+      const { studentId, yearId, month, attendance, homework, comment, recommendations, criteriaGrades } = req.body;
+      if (!studentId || !yearId || !month) {
+        return res.status(400).json({ error: 'Student ID, year ID, and month are required' });
+      }
+
+      const grade = await prisma.grade.upsert({
+        where: { studentId_yearId_month: { studentId, yearId, month } },
+        update: { attendance, homework, comment, recommendations },
+        create: { studentId, yearId, month, attendance, homework, comment, recommendations },
+        include: {
+          student: true,
+          year: true,
+          criteriaGrades: { include: { criterion: true } }
+        }
+      });
+
+      if (criteriaGrades && Array.isArray(criteriaGrades)) {
+        for (const cg of criteriaGrades) {
+          await prisma.criterionGrade.upsert({
+            where: { gradeId_criterionId: { gradeId: grade.id, criterionId: cg.criterionId } },
+            update: { value: cg.value },
+            create: { gradeId: grade.id, criterionId: cg.criterionId, value: cg.value }
+          });
+        }
+      }
+
+      const updatedGrade = await prisma.grade.findUnique({
+        where: { id: grade.id },
+        include: {
+          student: true,
+          year: true,
+          criteriaGrades: { include: { criterion: true } }
+        }
+      });
+      return res.json(updatedGrade);
+    }
 
     if (!id) return res.status(400).json({ error: 'Grade ID required' });
 
