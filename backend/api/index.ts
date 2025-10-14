@@ -27,8 +27,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).end();
   }
 
-  const path = req.url || '/';
-  console.log('Request:', req.method, path);
+  // Extract path, removing query params
+  const fullUrl = req.url || '/';
+  const path = fullUrl.split('?')[0];
+  console.log('Request:', req.method, fullUrl, 'Path:', path);
 
   try {
     // Root endpoint
@@ -49,7 +51,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Database test
-    if (path === '/api/db' || path.includes('?db')) {
+    if (path === '/api/db' || path === '/api/test-db' || fullUrl.includes('?db')) {
       const userCount = await prisma.user.count();
       return res.json({
         status: 'Database connected',
