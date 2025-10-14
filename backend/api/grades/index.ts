@@ -45,8 +45,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         where,
         include: {
           student: true,
-          criterion: true,
-          year: true
+          year: true,
+          criteriaGrades: {
+            include: {
+              criterion: true
+            }
+          }
         },
         orderBy: [
           { year: { year: 'desc' } },
@@ -58,38 +62,84 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (req.method === 'POST') {
-      const { studentId, criterionId, yearId, month, value } = req.body;
+      const { studentId, yearId, month, attendance, homework, comment, recommendations, criteriaGrades } = req.body;
 
-      if (!studentId || !criterionId || !yearId || !month || value === undefined) {
-        return res.status(400).json({ error: 'All fields are required' });
+      if (!studentId || !yearId || !month) {
+        return res.status(400).json({ error: 'Student ID, year ID, and month are required' });
       }
 
-      // Upsert - update if exists, create if not
+      // Upsert grade
       const grade = await prisma.grade.upsert({
         where: {
-          studentId_criterionId_yearId_month: {
+          studentId_yearId_month: {
             studentId,
-            criterionId,
             yearId,
             month
           }
         },
-        update: { value },
+        update: {
+          attendance,
+          homework,
+          comment,
+          recommendations
+        },
         create: {
           studentId,
-          criterionId,
           yearId,
           month,
-          value
+          attendance,
+          homework,
+          comment,
+          recommendations
         },
         include: {
           student: true,
-          criterion: true,
-          year: true
+          year: true,
+          criteriaGrades: {
+            include: {
+              criterion: true
+            }
+          }
         }
       });
 
-      return res.json(grade);
+      // Update criteria grades if provided
+      if (criteriaGrades && Array.isArray(criteriaGrades)) {
+        for (const cg of criteriaGrades) {
+          await prisma.criterionGrade.upsert({
+            where: {
+              gradeId_criterionId: {
+                gradeId: grade.id,
+                criterionId: cg.criterionId
+              }
+            },
+            update: {
+              value: cg.value
+            },
+            create: {
+              gradeId: grade.id,
+              criterionId: cg.criterionId,
+              value: cg.value
+            }
+          });
+        }
+      }
+
+      // Fetch updated grade with criteria
+      const updatedGrade = await prisma.grade.findUnique({
+        where: { id: grade.id },
+        include: {
+          student: true,
+          year: true,
+          criteriaGrades: {
+            include: {
+              criterion: true
+            }
+          }
+        }
+      });
+
+      return res.json(updatedGrade);
     }
 
     return res.status(405).json({ error: 'Method not allowed' });

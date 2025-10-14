@@ -49,7 +49,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       const criterion = await prisma.criterion.create({
-        data: { name, weight, scale, order: order || 0, teacherId: user.userId }
+        data: { name, weight, scale, order: order || 0 }
       });
 
       return res.status(201).json(criterion);
