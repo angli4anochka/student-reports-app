@@ -52,10 +52,7 @@ const GradesTable: React.FC = () => {
   const [selectedGroup, setSelectedGroup] = useState<string>(() => 
     localStorage.getItem('gradesTable_selectedGroup') || ''
   );
-  const [gradesData, setGradesData] = useState<GradeData>(() => {
-    const saved = localStorage.getItem('gradesTable_gradesData');
-    return saved ? JSON.parse(saved) : {};
-  });
+  const [gradesData, setGradesData] = useState<GradeData>({});
   const [loading, setLoading] = useState(false);
   const [showAddStudent, setShowAddStudent] = useState(false);
   const [showAddGroup, setShowAddGroup] = useState(false);
@@ -80,14 +77,14 @@ const GradesTable: React.FC = () => {
       setStudents([]);
       setGradesData({});
     }
-  }, [selectedGroup, selectedMonth]);
+  }, [selectedGroup, selectedMonth, selectedYear]);
 
   // Reload grades when year or month changes
   useEffect(() => {
     if (selectedYear && selectedMonth && students.length > 0) {
       loadGradesForStudents(students);
     }
-  }, [selectedYear, selectedMonth, criteria]);
+  }, [selectedYear, selectedMonth, criteria, students.length]);
 
   // Сохранение выбранных значений в localStorage
   useEffect(() => {
@@ -101,10 +98,6 @@ const GradesTable: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('gradesTable_selectedGroup', selectedGroup);
   }, [selectedGroup]);
-
-  useEffect(() => {
-    localStorage.setItem('gradesTable_gradesData', JSON.stringify(gradesData));
-  }, [gradesData]);
 
   const loadInitialData = async () => {
     try {
