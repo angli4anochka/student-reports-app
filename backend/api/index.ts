@@ -30,11 +30,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Extract path, removing query params
   const fullUrl = req.url || '/';
   const path = fullUrl.split('?')[0];
-  console.log('Request:', req.method, fullUrl, 'Path:', path);
+
+  // Get the actual path from query params if exists (from Vercel rewrites)
+  const urlParams = new URLSearchParams(fullUrl.split('?')[1] || '');
+  const rewritePath = urlParams.get('path');
+  const actualPath = rewritePath ? `/api/${rewritePath}` : path;
+
+  console.log('Request:', req.method, fullUrl, 'Actual path:', actualPath);
 
   try {
     // Root endpoint
-    if (path === '/api' || path === '/api/') {
+    if (actualPath === '/api' || actualPath === '/api/' || path === '/api' || path === '/api/') {
       return res.json({
         message: 'Student Reports API',
         version: '6.0.0',
@@ -43,7 +49,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Health check
-    if (path === '/api/health' || path.includes('/health')) {
+    if (actualPath === '/api/health' || actualPath.includes('/health')) {
       return res.json({
         status: 'OK',
         timestamp: new Date().toISOString()
@@ -51,7 +57,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Database test
-    if (path === '/api/db' || path === '/api/test-db' || fullUrl.includes('?db')) {
+    if (actualPath === '/api/db' || actualPath === '/api/test-db' || actualPath.includes('/db')) {
       const userCount = await prisma.user.count();
       return res.json({
         status: 'Database connected',
@@ -61,7 +67,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Login endpoint
-    if (path === '/api/auth/login' && req.method === 'POST') {
+    if (actualPath === '/api/auth/login' && req.method === 'POST') {
       const { email, password } = req.body;
 
       if (!email || !password) {
@@ -103,7 +109,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Not found
-    return res.status(404).json({ error: 'Not found', path });
+    return res.status(404).json({ error: 'Not found', path, actualPath });
 
   } catch (error) {
     console.error('Error:', error);
