@@ -5,7 +5,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://backend2-flax.vercel.app/api/:path*"
+      "destination": "https://backend2-iota-sand.vercel.app/api/:path*"
     }
   ]
 }
