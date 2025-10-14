@@ -169,6 +169,36 @@ class ApiService {
       body: JSON.stringify(data),
     });
   }
+
+  // Lessons endpoints
+  async getLessons(filters: { groupId?: string } = {}) {
+    const params = new URLSearchParams();
+    if (filters.groupId) params.append('groupId', filters.groupId);
+
+    return this.request<any[]>(`/lessons?${params.toString()}`);
+  }
+
+  async getLesson(id: string) {
+    return this.request<any>(`/lessons/${id}`);
+  }
+
+  async createLesson(data: { date: string; topic: string; homework?: string; comment?: string; groupId?: string }) {
+    return this.request<any>('/lessons', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateLesson(id: string, data: { date?: string; topic?: string; homework?: string; comment?: string; groupId?: string }) {
+    return this.request<any>(`/lessons/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteLesson(id: string) {
+    return this.request(`/lessons/${id}`, { method: 'DELETE' });
+  }
 }
 
 export const api = new ApiService();

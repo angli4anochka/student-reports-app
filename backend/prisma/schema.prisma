@@ -20,6 +20,7 @@ model User {
   students Student[]
   years    Year[]
   groups   Group[]
+  lessons  Lesson[]
 
   @@index([email])
   @@index([role])
@@ -30,12 +31,13 @@ model Group {
   id          String @id @default(uuid())
   name        String
   description String?
-  
+
   teacherId String
   teacher   User   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  
+
   students Student[]
-  
+  lessons  Lesson[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -174,6 +176,29 @@ model GradeScale {
   updatedAt DateTime @updatedAt
 
   @@map("grade_scales")
+}
+
+model Lesson {
+  id       String @id @default(uuid())
+  date     String // Date in format DD.MM or ISO
+  topic    String // Lesson topic/title
+  homework String? // Homework assignment
+  comment  String? // Additional comments
+
+  teacherId String
+  teacher   User   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  groupId String?
+  group   Group? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([teacherId])
+  @@index([groupId])
+  @@index([date])
+  @@index([teacherId, groupId])
+  @@map("lessons")
 }
 
 enum Role {

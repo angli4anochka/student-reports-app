@@ -30,6 +30,7 @@ import StudentForm from './StudentForm';
 import GradeEntry from './GradeEntry';
 import GradesTable from './GradesTable';
 import StudentReport from './StudentReport';
+import LessonsSchedule from './LessonsSchedule';
 
 const Dashboard: React.FC = () => {
   const [students, setStudents] = useState<Student[]>([]);
@@ -40,8 +41,8 @@ const Dashboard: React.FC = () => {
   const [showStudentReport, setShowStudentReport] = useState(false);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({ group: '', search: '' });
-  const [activeTab, setActiveTab] = useState<'students' | 'grades'>(() => 
-    (localStorage.getItem('dashboard_activeTab') as 'students' | 'grades') || 'students'
+  const [activeTab, setActiveTab] = useState<'students' | 'grades' | 'schedule'>(() =>
+    (localStorage.getItem('dashboard_activeTab') as 'students' | 'grades' | 'schedule') || 'students'
   );
 
   useEffect(() => {
@@ -175,6 +176,22 @@ const Dashboard: React.FC = () => {
           }}
         >
           📊 Табличная форма оценок
+        </button>
+        <button
+          onClick={() => setActiveTab('schedule')}
+          style={{
+            backgroundColor: activeTab === 'schedule' ? '#2196F3' : 'transparent',
+            color: activeTab === 'schedule' ? 'white' : '#2196F3',
+            border: 'none',
+            padding: '1rem 2rem',
+            borderRadius: '8px 8px 0 0',
+            cursor: 'pointer',
+            fontSize: '1rem',
+            fontWeight: 'bold',
+            transition: 'all 0.2s'
+          }}
+        >
+          📅 Расписание и ДЗ
         </button>
       </div>
 
@@ -314,6 +331,8 @@ const Dashboard: React.FC = () => {
       )}
 
       {activeTab === 'grades' && <GradesTable />}
+
+      {activeTab === 'schedule' && <LessonsSchedule />}
 
       {showStudentForm && (
         <StudentForm
