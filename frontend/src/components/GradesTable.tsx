@@ -199,6 +199,8 @@ const GradesTable: React.FC = () => {
   };
 
   const updateGrade = async (studentId: string, criterionId: string, value: number) => {
+    console.log('updateGrade called:', { studentId, criterionId, value, selectedYear, selectedMonth });
+
     // Get current student data before updating state
     const currentStudentData = gradesData[studentId] || {};
     const updatedStudentData = { ...currentStudentData, [criterionId]: value };
@@ -230,6 +232,8 @@ const GradesTable: React.FC = () => {
       } catch (error) {
         console.error('Error auto-saving grade:', error);
       }
+    } else {
+      console.warn('Cannot auto-save: Year or month not selected', { selectedYear, selectedMonth });
     }
   };
 
