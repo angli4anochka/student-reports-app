@@ -1,12 +1,6 @@
 {
   "version": 2,
   "buildCommand": "npm run build",
-  "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "/api/index"
-    }
-  ],
   "headers": [
     {
       "source": "/api/(.*)",
