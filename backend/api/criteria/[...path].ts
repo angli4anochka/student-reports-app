@@ -8,14 +8,12 @@ const JWT_SECRET = process.env.JWT_SECRET || 'default-secret';
 function verifyToken(req: VercelRequest): any {
   const authHeader = req.headers.authorization;
   if (!authHeader) throw new Error('No authorization header');
-
   const token = authHeader.replace('Bearer ', '');
   return jwt.verify(token, JWT_SECRET);
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const origin = req.headers.origin;
-
   if (origin && (origin.includes('.vercel.app') || origin.includes('localhost'))) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -23,57 +21,44 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader('Access-Control-Allow-Origin', '*');
   }
 
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
     const user = verifyToken(req);
-    const { id } = req.query;
+    const path = req.query.path as string[];
+    const id = path?.[0];
 
-    if (!id || typeof id !== 'string') {
-      return res.status(400).json({ error: 'Invalid student ID' });
-    }
+    if (!id) return res.status(400).json({ error: 'Criterion ID required' });
 
     if (req.method === 'GET') {
-      const { yearId, month } = req.query;
+      const criterion = await prisma.criterion.findUnique({ where: { id } });
+      if (!criterion) return res.status(404).json({ error: 'Criterion not found' });
+      return res.json(criterion);
+    }
 
-      const where: any = { studentId: id };
-      if (yearId) where.yearId = yearId;
-      if (month) where.month = month;
-
-      const grades = await prisma.grade.findMany({
-        where,
-        include: {
-          student: true,
-          year: true,
-          criteriaGrades: {
-            include: {
-              criterion: true
-            }
-          }
-        },
-        orderBy: [
-          { year: { year: 'desc' } },
-          { month: 'asc' }
-        ]
+    if (req.method === 'PUT') {
+      const { name, weight, scale, order } = req.body;
+      const criterion = await prisma.criterion.update({
+        where: { id },
+        data: { name, weight, scale, order }
       });
+      return res.json(criterion);
+    }
 
-      return res.json(grades);
+    if (req.method === 'DELETE') {
+      await prisma.criterion.delete({ where: { id } });
+      return res.status(204).end();
     }
 
     return res.status(405).json({ error: 'Method not allowed' });
-
   } catch (error) {
-    console.error('Student grades error:', error);
-
+    console.error('Criterion error:', error);
     if (error instanceof jwt.JsonWebTokenError) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
-
     return res.status(500).json({
       error: 'Internal server error',
       message: error instanceof Error ? error.message : 'Unknown error'
