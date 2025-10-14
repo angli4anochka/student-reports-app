@@ -25,8 +25,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).end();
   }
 
-  // Get the path without query string
-  const actualPath = (req.url || '').split('?')[0];
+  // Extract path - check if Vercel added path query parameter
+  const urlParams = new URLSearchParams((req.url || '').split('?')[1] || '');
+  const pathParam = urlParams.get('path');
+
+  // If path query param exists (from rewrite), use it; otherwise use URL path
+  const actualPath = pathParam ? `/${pathParam}` : (req.url || '').split('?')[0];
+
+  console.log('URL:', req.url, 'pathParam:', pathParam, 'actualPath:', actualPath);
 
   try {
     // Root
