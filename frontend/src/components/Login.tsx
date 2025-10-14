@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const Login: React.FC = () => {
   const { login } = useAuth();
+  const navigate = useNavigate();
   const [email, setEmail] = useState('teacher@demo.com');
   const [password, setPassword] = useState('demo123');
   const [loading, setLoading] = useState(false);
@@ -113,10 +115,29 @@ const Login: React.FC = () => {
           </button>
         </form>
         
-        <div style={{ 
-          marginTop: '1.5rem', 
-          padding: '1rem', 
-          backgroundColor: '#e3f2fd', 
+        <div style={{ marginTop: '1.5rem', textAlign: 'center', color: '#666' }}>
+          Нет аккаунта?{' '}
+          <button
+            type="button"
+            onClick={() => navigate('/register')}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#2196F3',
+              cursor: 'pointer',
+              textDecoration: 'underline',
+              padding: 0,
+              font: 'inherit'
+            }}
+          >
+            Зарегистрироваться
+          </button>
+        </div>
+
+        <div style={{
+          marginTop: '1.5rem',
+          padding: '1rem',
+          backgroundColor: '#e3f2fd',
           borderRadius: '4px',
           fontSize: '0.875rem'
         }}>
