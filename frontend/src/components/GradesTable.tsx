@@ -199,21 +199,21 @@ const GradesTable: React.FC = () => {
   };
 
   const updateGrade = async (studentId: string, criterionId: string, value: number) => {
+    // Get current student data before updating state
+    const currentStudentData = gradesData[studentId] || {};
+    const updatedStudentData = { ...currentStudentData, [criterionId]: value };
+
     setGradesData(prev => ({
       ...prev,
-      [studentId]: {
-        ...prev[studentId],
-        [criterionId]: value
-      }
+      [studentId]: updatedStudentData
     }));
 
     // Auto-save to database if year and month are selected
     if (selectedYear && selectedMonth) {
       try {
-        const studentGrades = { ...gradesData[studentId], [criterionId]: value };
         const criteriaGrades = criteria.map(criterion => ({
           criterionId: criterion.id,
-          value: criterion.id === criterionId ? value : ((studentGrades[criterion.id] as number) || 1)
+          value: criterion.id === criterionId ? value : ((updatedStudentData[criterion.id] as number) || 1)
         }));
 
         const gradeData = {
@@ -221,10 +221,12 @@ const GradesTable: React.FC = () => {
           yearId: selectedYear,
           month: selectedMonth,
           criteriaGrades: criteriaGrades,
-          comment: studentGrades.comment || ''
+          comment: updatedStudentData.comment || ''
         };
 
+        console.log('Auto-saving grade:', gradeData);
         await api.saveGrade(gradeData);
+        console.log('Grade saved successfully');
       } catch (error) {
         console.error('Error auto-saving grade:', error);
       }
@@ -232,21 +234,21 @@ const GradesTable: React.FC = () => {
   };
 
   const updateComment = async (studentId: string, comment: string) => {
+    // Get current student data before updating state
+    const currentStudentData = gradesData[studentId] || {};
+    const updatedStudentData = { ...currentStudentData, comment };
+
     setGradesData(prev => ({
       ...prev,
-      [studentId]: {
-        ...prev[studentId],
-        comment
-      }
+      [studentId]: updatedStudentData
     }));
 
     // Auto-save to database if year and month are selected
     if (selectedYear && selectedMonth) {
       try {
-        const studentGrades = { ...gradesData[studentId], comment };
         const criteriaGrades = criteria.map(criterion => ({
           criterionId: criterion.id,
-          value: (studentGrades[criterion.id] as number) || 1
+          value: (updatedStudentData[criterion.id] as number) || 1
         }));
 
         const gradeData = {
@@ -257,7 +259,9 @@ const GradesTable: React.FC = () => {
           comment: comment
         };
 
+        console.log('Auto-saving comment:', gradeData);
         await api.saveGrade(gradeData);
+        console.log('Comment saved successfully');
       } catch (error) {
         console.error('Error auto-saving comment:', error);
       }
