@@ -30,6 +30,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const rewritePath = urlParams.get('path');
   const actualPath = rewritePath ? `/api/${rewritePath}` : (req.url || '').split('?')[0];
 
+  console.log('Request URL:', req.url);
+  console.log('Rewrite path:', rewritePath);
+  console.log('Actual path:', actualPath);
+
   try {
     // Root
     if (actualPath === '/api' || actualPath === '/api/') {
