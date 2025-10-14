@@ -43,7 +43,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Health check
-    if (path === '/api/health') {
+    if (path === '/api/health' || path.includes('/health')) {
       return res.json({
         status: 'OK',
         timestamp: new Date().toISOString()
