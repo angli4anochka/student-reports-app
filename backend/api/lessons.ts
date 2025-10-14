@@ -61,28 +61,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // POST /lessons - create lesson
     if (!id && req.method === 'POST') {
-      const { date, topic, homework, comment, groupId } = req.body;
-      if (!date || !topic) {
-        return res.status(400).json({ error: 'Date and topic are required' });
+      try {
+        const { date, topic, homework, comment, groupId } = req.body;
+        console.log('Creating lesson:', { date, topic, homework, comment, groupId, userId: user.userId });
+
+        if (!date || !topic) {
+          return res.status(400).json({ error: 'Date and topic are required' });
+        }
+
+        const lessonId = randomUUID();
+        const now = new Date().toISOString();
+        const finalGroupId = groupId && groupId !== '' ? groupId : null;
+
+        console.log('Inserting lesson with ID:', lessonId, 'groupId:', finalGroupId);
+
+        await prisma.$executeRaw`
+          INSERT INTO lessons (id, date, topic, homework, comment, "teacherId", "groupId", "createdAt", "updatedAt")
+          VALUES (${lessonId}, ${date}, ${topic}, ${homework || ''}, ${comment || ''}, ${user.userId}, ${finalGroupId}, ${now}, ${now})
+        `;
+
+        console.log('Lesson inserted, fetching result');
+
+        const lesson = await prisma.$queryRaw`
+          SELECT l.*,
+                 jsonb_build_object('id', g.id, 'name', g.name, 'description', g.description) as group
+          FROM lessons l
+          LEFT JOIN groups g ON l."groupId" = g.id
+          WHERE l.id = ${lessonId}
+        `;
+
+        console.log('Lesson fetched:', lesson);
+        return res.status(201).json((lesson as any[])[0]);
+      } catch (insertError) {
+        console.error('Error creating lesson:', insertError);
+        throw insertError;
       }
-
-      const lessonId = randomUUID();
-      const now = new Date().toISOString();
-
-      await prisma.$executeRaw`
-        INSERT INTO lessons (id, date, topic, homework, comment, "teacherId", "groupId", "createdAt", "updatedAt")
-        VALUES (${lessonId}, ${date}, ${topic}, ${homework || ''}, ${comment || ''}, ${user.userId}, ${groupId || null}, ${now}, ${now})
-      `;
-
-      const lesson = await prisma.$queryRaw`
-        SELECT l.*,
-               jsonb_build_object('id', g.id, 'name', g.name, 'description', g.description) as group
-        FROM lessons l
-        LEFT JOIN groups g ON l."groupId" = g.id
-        WHERE l.id = ${lessonId}
-      `;
-
-      return res.status(201).json((lesson as any[])[0]);
     }
 
     if (!id) return res.status(400).json({ error: 'Lesson ID required' });
@@ -104,11 +117,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method === 'PUT') {
       const { date, topic, homework, comment, groupId } = req.body;
       const now = new Date().toISOString();
+      const finalGroupId = groupId && groupId !== '' ? groupId : null;
 
       await prisma.$executeRaw`
         UPDATE lessons
         SET date = ${date}, topic = ${topic}, homework = ${homework}, comment = ${comment},
-            "groupId" = ${groupId || null}, "updatedAt" = ${now}
+            "groupId" = ${finalGroupId}, "updatedAt" = ${now}
         WHERE id = ${id}
       `;
 
