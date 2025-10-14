@@ -26,9 +26,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // Extract actual path from Vercel rewrites
-  const urlParams = new URLSearchParams((req.url || '').split('?')[1] || '');
+  const url = req.url || '';
+  const [urlPath, queryString] = url.split('?');
+  const urlParams = new URLSearchParams(queryString || '');
   const rewritePath = urlParams.get('path');
-  const actualPath = rewritePath ? `/api/${rewritePath}` : (req.url || '').split('?')[0];
+  const actualPath = rewritePath ? `/api/${rewritePath}` : urlPath;
 
   console.log('Request URL:', req.url);
   console.log('Rewrite path:', rewritePath);
