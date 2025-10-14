@@ -220,7 +220,7 @@ const GradesTable: React.FC = () => {
           studentId,
           yearId: selectedYear,
           month: selectedMonth,
-          criteria: criteriaGrades,
+          criteriaGrades: criteriaGrades,
           comment: studentGrades.comment || ''
         };
 
@@ -253,7 +253,7 @@ const GradesTable: React.FC = () => {
           studentId,
           yearId: selectedYear,
           month: selectedMonth,
-          criteria: criteriaGrades,
+          criteriaGrades: criteriaGrades,
           comment: comment
         };
 
@@ -285,7 +285,7 @@ const GradesTable: React.FC = () => {
           studentId,
           yearId: selectedYear,
           month: selectedMonth,
-          criteria: criteriaGrades,
+          criteriaGrades: criteriaGrades,
           comment: studentGrades.comment || ''
         };
 
