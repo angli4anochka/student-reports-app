@@ -43,9 +43,11 @@ const GradesTable: React.FC = () => {
   const [groups, setGroups] = useState<Group[]>([]);
   const [years, setYears] = useState<Year[]>([]);
   const [criteria, setCriteria] = useState<Criterion[]>([]);
-  const [selectedYear, setSelectedYear] = useState<string>(() => 
-    localStorage.getItem('gradesTable_selectedYear') || ''
-  );
+  const [selectedYear, setSelectedYear] = useState<string>(() => {
+    const saved = localStorage.getItem('gradesTable_selectedYear') || '';
+    console.log('Initial selectedYear from localStorage:', saved);
+    return saved;
+  });
   const [selectedMonth, setSelectedMonth] = useState<string>(() => 
     localStorage.getItem('gradesTable_selectedMonth') || ''
   );
@@ -65,6 +67,7 @@ const GradesTable: React.FC = () => {
   ];
 
   useEffect(() => {
+    console.log('Component mounted, loading initial data...');
     loadInitialData();
   }, []);
 
@@ -106,13 +109,27 @@ const GradesTable: React.FC = () => {
         api.getYears(),
         api.getCriteria()
       ]);
-      
+
+      console.log('Loaded years data:', yearsData);
       setGroups(groupsData);
       setYears(yearsData);
       setCriteria(criteriaData);
-      
+
+      // Auto-select the first year if no year is selected or if the selected year doesn't exist
       if (yearsData.length > 0) {
-        setSelectedYear(yearsData[0].id);
+        const savedYear = localStorage.getItem('gradesTable_selectedYear');
+        console.log('Saved year from localStorage:', savedYear);
+        const yearExists = savedYear && yearsData.some(y => y.id === savedYear);
+        console.log('Year exists in data?', yearExists);
+
+        if (!yearExists) {
+          console.log('Auto-selecting first year:', yearsData[0].year, yearsData[0].id);
+          setSelectedYear(yearsData[0].id);
+          localStorage.setItem('gradesTable_selectedYear', yearsData[0].id);
+        } else {
+          console.log('Using saved year:', savedYear);
+          setSelectedYear(savedYear);
+        }
       }
     } catch (error) {
       console.error('Error loading initial data:', error);
