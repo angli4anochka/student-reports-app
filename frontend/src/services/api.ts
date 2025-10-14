@@ -19,14 +19,17 @@ class ApiService {
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
-    
+
+    // Always get fresh token from localStorage
+    const currentToken = localStorage.getItem('token') || this.token;
+
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...options.headers,
     };
 
-    if (this.token) {
-      headers.Authorization = `Bearer ${this.token}`;
+    if (currentToken) {
+      headers.Authorization = `Bearer ${currentToken}`;
     }
 
     const response = await fetch(url, {
