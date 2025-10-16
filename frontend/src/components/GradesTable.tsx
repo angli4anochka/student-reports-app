@@ -43,11 +43,7 @@ const GradesTable: React.FC = () => {
   const [groups, setGroups] = useState<Group[]>([]);
   const [years, setYears] = useState<Year[]>([]);
   const [criteria, setCriteria] = useState<Criterion[]>([]);
-  const [selectedYear, setSelectedYear] = useState<string>(() => {
-    const saved = localStorage.getItem('gradesTable_selectedYear') || '';
-    console.log('Initial selectedYear from localStorage:', saved);
-    return saved;
-  });
+  const [selectedYear, setSelectedYear] = useState<string>('');
   const [selectedMonth, setSelectedMonth] = useState<string>(() => 
     localStorage.getItem('gradesTable_selectedMonth') || ''
   );
@@ -91,10 +87,6 @@ const GradesTable: React.FC = () => {
 
   // Сохранение выбранных значений в localStorage
   useEffect(() => {
-    localStorage.setItem('gradesTable_selectedYear', selectedYear);
-  }, [selectedYear]);
-
-  useEffect(() => {
     localStorage.setItem('gradesTable_selectedMonth', selectedMonth);
   }, [selectedMonth]);
 
@@ -115,21 +107,10 @@ const GradesTable: React.FC = () => {
       setYears(yearsData);
       setCriteria(criteriaData);
 
-      // Auto-select the first year if no year is selected or if the selected year doesn't exist
+      // Always auto-select the first year (2025-2026)
       if (yearsData.length > 0) {
-        const savedYear = localStorage.getItem('gradesTable_selectedYear');
-        console.log('Saved year from localStorage:', savedYear);
-        const yearExists = savedYear && yearsData.some(y => y.id === savedYear);
-        console.log('Year exists in data?', yearExists);
-
-        if (!yearExists) {
-          console.log('Auto-selecting first year:', yearsData[0].year, yearsData[0].id);
-          setSelectedYear(yearsData[0].id);
-          localStorage.setItem('gradesTable_selectedYear', yearsData[0].id);
-        } else {
-          console.log('Using saved year:', savedYear);
-          setSelectedYear(savedYear);
-        }
+        console.log('Auto-selecting first year:', yearsData[0].year, yearsData[0].id);
+        setSelectedYear(yearsData[0].id);
       }
     } catch (error) {
       console.error('Error loading initial data:', error);
@@ -407,21 +388,16 @@ const GradesTable: React.FC = () => {
         }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             <label style={{ fontWeight: 'bold', color: '#555' }}>Учебный год:</label>
-            <select
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(e.target.value)}
-              style={{ 
-                padding: '0.5rem', 
-                border: '1px solid #ddd', 
-                borderRadius: '4px',
-                fontSize: '1rem'
-              }}
-            >
-              <option value="">Выберите год</option>
-              {years.map(year => (
-                <option key={year.id} value={year.id}>{year.year}</option>
-              ))}
-            </select>
+            <div style={{
+              padding: '0.5rem',
+              border: '1px solid #ddd',
+              borderRadius: '4px',
+              fontSize: '1rem',
+              backgroundColor: '#f5f5f5',
+              color: '#333'
+            }}>
+              {years.find(y => y.id === selectedYear)?.year || 'Загрузка...'}
+            </div>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>

@@ -11,6 +11,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, fullName: string) => Promise<void>;
   logout: () => void;
   loading: boolean;
 }
@@ -57,7 +58,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setUser(response.user);
       // Сохраняем данные пользователя в localStorage
       localStorage.setItem('user', JSON.stringify(response.user));
+      console.log('Login successful, user data saved');
     } catch (error) {
+      console.error('Login failed:', error);
+      throw error;
+    }
+  };
+
+  const register = async (email: string, password: string, fullName: string) => {
+    try {
+      const response = await api.register(email, password, fullName);
+      setUser(response.user);
+      // Сохраняем данные пользователя в localStorage
+      localStorage.setItem('user', JSON.stringify(response.user));
+      console.log('Registration successful, user data saved');
+    } catch (error) {
+      console.error('Registration failed:', error);
       throw error;
     }
   };
@@ -67,11 +83,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setUser(null);
     // Очищаем данные пользователя из localStorage
     localStorage.removeItem('user');
+    console.log('Logout successful, user data cleared');
   };
 
   const value = {
     user,
     login,
+    register,
     logout,
     loading,
   };

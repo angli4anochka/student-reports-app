@@ -37,6 +37,16 @@ class ApiService {
       headers,
     });
 
+    // Handle 401 Unauthorized - token expired or invalid
+    if (response.status === 401) {
+      console.warn('Token expired or invalid, clearing auth data');
+      this.clearToken();
+      localStorage.removeItem('user');
+      // Reload page to redirect to login
+      window.location.href = '/login';
+      throw new Error('Unauthorized - please login again');
+    }
+
     if (!response.ok) {
       const error = await response.json().catch(() => ({ message: 'Network error' }));
       throw new Error(error.error || error.message || 'Request failed');
@@ -207,6 +217,36 @@ class ApiService {
 
   async deleteLesson(id: string) {
     return this.request(`/lessons/${id}`, { method: 'DELETE' });
+  }
+
+  // Admin endpoints
+  async getAdminUsers() {
+    return this.request<any[]>('/admin/users');
+  }
+
+  async createAdminUser(data: { email: string; password: string; fullName: string; role: 'TEACHER' | 'ADMIN' }) {
+    return this.request<any>('/admin/users', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateAdminUser(id: string, data: { email?: string; password?: string; fullName?: string; role?: 'TEACHER' | 'ADMIN' }) {
+    return this.request<any>(`/admin/users?id=${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteAdminUser(id: string) {
+    return this.request(`/admin/users?id=${id}`, { method: 'DELETE' });
+  }
+
+  async createFirstAdmin(data: { email: string; password: string; fullName: string; adminSecret: string }) {
+    return this.request<any>('/admin/create-admin', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   }
 }
 

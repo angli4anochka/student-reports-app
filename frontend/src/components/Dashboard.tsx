@@ -31,8 +31,11 @@ import GradeEntry from './GradeEntry';
 import GradesTable from './GradesTable';
 import StudentReport from './StudentReport';
 import LessonsSchedule from './LessonsSchedule';
+import AdminPanel from './AdminPanel';
+import { useAuth } from '../context/AuthContext';
 
 const Dashboard: React.FC = () => {
+  const { user } = useAuth();
   const [students, setStudents] = useState<Student[]>([]);
   const [years, setYears] = useState<Year[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
@@ -41,8 +44,8 @@ const Dashboard: React.FC = () => {
   const [showStudentReport, setShowStudentReport] = useState(false);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({ group: '', search: '' });
-  const [activeTab, setActiveTab] = useState<'students' | 'grades' | 'schedule'>(() =>
-    (localStorage.getItem('dashboard_activeTab') as 'students' | 'grades' | 'schedule') || 'students'
+  const [activeTab, setActiveTab] = useState<'students' | 'grades' | 'schedule' | 'admin'>(() =>
+    (localStorage.getItem('dashboard_activeTab') as 'students' | 'grades' | 'schedule' | 'admin') || 'students'
   );
 
   useEffect(() => {
@@ -193,6 +196,24 @@ const Dashboard: React.FC = () => {
         >
           📅 Расписание и ДЗ
         </button>
+        {user?.role === 'ADMIN' && (
+          <button
+            onClick={() => setActiveTab('admin')}
+            style={{
+              backgroundColor: activeTab === 'admin' ? '#2196F3' : 'transparent',
+              color: activeTab === 'admin' ? 'white' : '#2196F3',
+              border: 'none',
+              padding: '1rem 2rem',
+              borderRadius: '8px 8px 0 0',
+              cursor: 'pointer',
+              fontSize: '1rem',
+              fontWeight: 'bold',
+              transition: 'all 0.2s'
+            }}
+          >
+            ⚙️ Админ-панель
+          </button>
+        )}
       </div>
 
       {activeTab === 'students' && (
@@ -333,6 +354,8 @@ const Dashboard: React.FC = () => {
       {activeTab === 'grades' && <GradesTable />}
 
       {activeTab === 'schedule' && <LessonsSchedule />}
+
+      {activeTab === 'admin' && user?.role === 'ADMIN' && <AdminPanel />}
 
       {showStudentForm && (
         <StudentForm
