@@ -52,6 +52,7 @@ const ScheduleCalendar: React.FC = () => {
   useEffect(() => {
     if (selectedGroup) {
       loadStudents();
+      loadGroupScheduleSettings();
     }
   }, [selectedGroup]);
 
@@ -161,11 +162,42 @@ const ScheduleCalendar: React.FC = () => {
     setLessonDates(dates);
   };
 
-  const toggleWeekday = (day: number) => {
+  const loadGroupScheduleSettings = async () => {
+    if (!selectedGroup) return;
+
+    try {
+      const settings = await api.getGroupScheduleSettings(selectedGroup);
+      if (settings.weekdays) {
+        const days = settings.weekdays.split(',').map(Number);
+        setWeekDays(days);
+        console.log('Loaded schedule settings for group:', days);
+      }
+    } catch (error) {
+      console.error('Error loading group schedule settings:', error);
+    }
+  };
+
+  const toggleWeekday = async (day: number) => {
+    let newWeekDays: number[];
     if (weekDays.includes(day)) {
-      setWeekDays(weekDays.filter(d => d !== day));
+      newWeekDays = weekDays.filter(d => d !== day);
     } else {
-      setWeekDays([...weekDays, day].sort());
+      newWeekDays = [...weekDays, day].sort();
+    }
+
+    setWeekDays(newWeekDays);
+
+    // Save to database
+    if (selectedGroup) {
+      try {
+        await api.saveGroupScheduleSettings({
+          groupId: selectedGroup,
+          weekdays: newWeekDays.join(',')
+        });
+        console.log('Saved weekday settings:', newWeekDays);
+      } catch (error) {
+        console.error('Error saving weekday settings:', error);
+      }
     }
   };
 

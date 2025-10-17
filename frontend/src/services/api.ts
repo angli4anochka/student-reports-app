@@ -269,6 +269,18 @@ class ApiService {
   async deleteAttendance(studentId: string, date: string) {
     return this.request(`/attendance?studentId=${studentId}&date=${date}`, { method: 'DELETE' });
   }
+
+  // Group schedule settings endpoints
+  async getGroupScheduleSettings(groupId: string) {
+    return this.request<any>(`/group-schedule-settings?groupId=${groupId}`);
+  }
+
+  async saveGroupScheduleSettings(data: { groupId: string; weekdays: string }) {
+    return this.request<any>('/group-schedule-settings', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
 }
 
 export const api = new ApiService();
