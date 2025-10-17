@@ -31,6 +31,7 @@ import GradeEntry from './GradeEntry';
 import GradesTable from './GradesTable';
 import StudentReport from './StudentReport';
 import LessonsSchedule from './LessonsSchedule';
+import ScheduleCalendar from './ScheduleCalendar';
 import AdminPanel from './AdminPanel';
 import { useAuth } from '../context/AuthContext';
 
@@ -44,8 +45,8 @@ const Dashboard: React.FC = () => {
   const [showStudentReport, setShowStudentReport] = useState(false);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({ group: '', search: '' });
-  const [activeTab, setActiveTab] = useState<'students' | 'grades' | 'schedule' | 'admin'>(() =>
-    (localStorage.getItem('dashboard_activeTab') as 'students' | 'grades' | 'schedule' | 'admin') || 'students'
+  const [activeTab, setActiveTab] = useState<'students' | 'grades' | 'schedule' | 'attendance' | 'admin'>(() =>
+    (localStorage.getItem('dashboard_activeTab') as 'students' | 'grades' | 'schedule' | 'attendance' | 'admin') || 'students'
   );
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
@@ -206,6 +207,22 @@ const Dashboard: React.FC = () => {
           }}
         >
           📅 Расписание и ДЗ
+        </button>
+        <button
+          onClick={() => setActiveTab('attendance')}
+          style={{
+            backgroundColor: activeTab === 'attendance' ? '#2196F3' : 'transparent',
+            color: activeTab === 'attendance' ? 'white' : '#2196F3',
+            border: 'none',
+            padding: '1rem 2rem',
+            borderRadius: '8px 8px 0 0',
+            cursor: 'pointer',
+            fontSize: '1rem',
+            fontWeight: 'bold',
+            transition: 'all 0.2s'
+          }}
+        >
+          📆 Календарь посещаемости
         </button>
         {user?.role === 'ADMIN' && (
           <button
@@ -386,6 +403,8 @@ const Dashboard: React.FC = () => {
       {activeTab === 'grades' && <GradesTable />}
 
       {activeTab === 'schedule' && <LessonsSchedule />}
+
+      {activeTab === 'attendance' && <ScheduleCalendar />}
 
       {activeTab === 'admin' && user?.role === 'ADMIN' && <AdminPanel />}
 
