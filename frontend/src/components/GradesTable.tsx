@@ -144,8 +144,10 @@ const GradesTable: React.FC = () => {
   };
 
   const loadGradesForStudents = async (studentsData: Student[]) => {
+    console.log('loadGradesForStudents called with:', { studentsCount: studentsData.length, selectedYear, selectedMonth });
+
     if (!selectedYear || !selectedMonth) {
-      // If no year/month selected, just preserve localStorage data
+      console.warn('Year or month not selected, skipping grades load');
       return;
     }
 
@@ -155,9 +157,10 @@ const GradesTable: React.FC = () => {
         yearId: selectedYear,
         month: selectedMonth
       };
-      
+
+      console.log('Loading grades with filters:', gradesFilters);
       const existingGrades = await api.getGrades(gradesFilters);
-      console.log('Loaded existing grades from DB:', existingGrades);
+      console.log('Loaded existing grades from DB:', existingGrades.length, 'records');
       const gradesMap: GradeData = {};
       
       // Initialize all students with default values

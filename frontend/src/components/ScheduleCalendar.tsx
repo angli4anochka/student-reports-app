@@ -58,6 +58,10 @@ const ScheduleCalendar: React.FC = () => {
   useEffect(() => {
     if (selectedMonth) {
       calculateLessonDates();
+      // Reload attendance data when month changes
+      if (students.length > 0) {
+        loadAttendanceData(students);
+      }
     }
   }, [selectedMonth, weekDays]);
 
@@ -76,16 +80,56 @@ const ScheduleCalendar: React.FC = () => {
       const data = await api.getStudents({ groupId: selectedGroup });
       setStudents(data);
 
-      // Initialize attendance data
-      const initialAttendance: Attendance = {};
-      data.forEach((student: Student) => {
-        initialAttendance[student.id] = {};
-      });
-      setAttendance(initialAttendance);
+      // Load existing attendance data
+      await loadAttendanceData(data);
     } catch (error) {
       console.error('Error loading students:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadAttendanceData = async (studentsData: Student[]) => {
+    if (!selectedMonth || studentsData.length === 0) return;
+
+    try {
+      const monthIndex = MONTHS.indexOf(selectedMonth);
+      if (monthIndex === -1) return;
+
+      // Calculate date range for the selected month
+      const firstDay = `01.${String(monthIndex + 1).padStart(2, '0')}.${selectedYear}`;
+      const lastDay = `${new Date(selectedYear, monthIndex + 1, 0).getDate()}.${String(monthIndex + 1).padStart(2, '0')}.${selectedYear}`;
+
+      // Load attendance records from database
+      const attendanceData = await api.getAttendance({
+        groupId: selectedGroup,
+        dateFrom: firstDay,
+        dateTo: lastDay
+      });
+
+      console.log('Loaded attendance data:', attendanceData);
+
+      // Initialize attendance object
+      const loadedAttendance: Attendance = {};
+      studentsData.forEach((student: Student) => {
+        loadedAttendance[student.id] = {};
+      });
+
+      // Fill in the loaded attendance data
+      attendanceData.forEach((record: any) => {
+        if (loadedAttendance[record.studentId]) {
+          // Extract date in DD.MM format from DD.MM.YYYY
+          const dateMatch = record.date.match(/^(\d{2}\.\d{2})\.\d{4}$/);
+          if (dateMatch) {
+            const shortDate = dateMatch[1];
+            loadedAttendance[record.studentId][shortDate] = record.status.toLowerCase();
+          }
+        }
+      });
+
+      setAttendance(loadedAttendance);
+    } catch (error) {
+      console.error('Error loading attendance data:', error);
     }
   };
 
@@ -125,7 +169,8 @@ const ScheduleCalendar: React.FC = () => {
     }
   };
 
-  const updateAttendance = (studentId: string, date: string, status: 'present' | 'absent' | 'late' | '') => {
+  const updateAttendance = async (studentId: string, date: string, status: 'present' | 'absent' | 'late' | '') => {
+    // Update local state
     setAttendance(prev => ({
       ...prev,
       [studentId]: {
@@ -133,6 +178,33 @@ const ScheduleCalendar: React.FC = () => {
         [date]: status
       }
     }));
+
+    // Save to database
+    if (status === '') {
+      // Delete attendance record if status is empty
+      try {
+        const fullDate = `${date}.${selectedYear}`;
+        await api.deleteAttendance(studentId, fullDate);
+        console.log('Deleted attendance:', studentId, fullDate);
+      } catch (error) {
+        console.error('Error deleting attendance:', error);
+      }
+    } else {
+      // Save or update attendance record
+      try {
+        const fullDate = `${date}.${selectedYear}`;
+        const apiStatus = status.toUpperCase(); // Convert to PRESENT, ABSENT, LATE
+        await api.saveAttendance({
+          studentId,
+          date: fullDate,
+          status: apiStatus,
+          groupId: selectedGroup
+        });
+        console.log('Saved attendance:', studentId, fullDate, apiStatus);
+      } catch (error) {
+        console.error('Error saving attendance:', error);
+      }
+    }
   };
 
   const getAttendanceColor = (status: 'present' | 'absent' | 'late' | '') => {

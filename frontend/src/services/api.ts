@@ -248,6 +248,27 @@ class ApiService {
       body: JSON.stringify(data),
     });
   }
+
+  // Attendance endpoints
+  async getAttendance(filters: { studentId?: string; groupId?: string; dateFrom?: string; dateTo?: string } = {}) {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value) params.append(key, value);
+    });
+
+    return this.request<any[]>(`/attendance?${params.toString()}`);
+  }
+
+  async saveAttendance(data: { studentId: string; date: string; status: string; groupId?: string }) {
+    return this.request<any>('/attendance', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteAttendance(studentId: string, date: string) {
+    return this.request(`/attendance?studentId=${studentId}&date=${date}`, { method: 'DELETE' });
+  }
 }
 
 export const api = new ApiService();
