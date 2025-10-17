@@ -47,6 +47,7 @@ const Dashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'students' | 'grades' | 'schedule' | 'admin'>(() =>
     (localStorage.getItem('dashboard_activeTab') as 'students' | 'grades' | 'schedule' | 'admin') || 'students'
   );
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadData();
@@ -91,6 +92,16 @@ const Dashboard: React.FC = () => {
   const handleGradeEntryClick = (student: Student) => {
     setSelectedStudent(student);
     setShowGradeEntry(true);
+  };
+
+  const toggleGroup = (groupName: string) => {
+    const newCollapsed = new Set(collapsedGroups);
+    if (newCollapsed.has(groupName)) {
+      newCollapsed.delete(groupName);
+    } else {
+      newCollapsed.add(groupName);
+    }
+    setCollapsedGroups(newCollapsed);
   };
 
   if (loading) {
@@ -281,35 +292,56 @@ const Dashboard: React.FC = () => {
               <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
                 {Object.entries(groupedStudents)
                   .sort(([a], [b]) => a.localeCompare(b))
-                  .map(([groupName, groupStudents]) => (
-                    <div key={groupName} style={{ marginBottom: '1.5rem' }}>
-                      <h4 style={{ 
-                        backgroundColor: '#e3f2fd', 
-                        padding: '0.5rem 1rem', 
-                        margin: '0 0 0.5rem 0',
-                        borderRadius: '4px',
-                        color: '#1976d2',
-                        fontSize: '1rem',
-                        fontWeight: 'bold'
-                      }}>
-                        📚 {groupName} ({groupStudents.length} {groupStudents.length === 1 ? 'ученик' : 'учеников'})
-                      </h4>
-                      <StudentList
-                        students={groupStudents}
-                        onStudentSelect={(student) => {
-                          setSelectedStudent(student);
-                          setShowStudentReport(true);
-                        }}
-                        onStudentEdit={(student) => {
-                          setSelectedStudent(student);
-                          setShowStudentForm(true);
-                        }}
-                        onStudentDelete={handleStudentDeleted}
-                        onGradeEntry={handleGradeEntryClick}
-                        selectedStudent={selectedStudent}
-                      />
-                    </div>
-                  ))}
+                  .map(([groupName, groupStudents]) => {
+                    const isCollapsed = collapsedGroups.has(groupName);
+                    return (
+                      <div key={groupName} style={{ marginBottom: '1.5rem' }}>
+                        <h4
+                          onClick={() => toggleGroup(groupName)}
+                          style={{
+                            backgroundColor: '#e3f2fd',
+                            padding: '0.5rem 1rem',
+                            margin: '0 0 0.5rem 0',
+                            borderRadius: '4px',
+                            color: '#1976d2',
+                            fontSize: '1rem',
+                            fontWeight: 'bold',
+                            cursor: 'pointer',
+                            userSelect: 'none',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            transition: 'background-color 0.2s'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#bbdefb'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#e3f2fd'}
+                        >
+                          <span>
+                            📚 {groupName} ({groupStudents.length} {groupStudents.length === 1 ? 'ученик' : 'учеников'})
+                          </span>
+                          <span style={{ fontSize: '1.2rem' }}>
+                            {isCollapsed ? '▼' : '▲'}
+                          </span>
+                        </h4>
+                        {!isCollapsed && (
+                          <StudentList
+                            students={groupStudents}
+                            onStudentSelect={(student) => {
+                              setSelectedStudent(student);
+                              setShowStudentReport(true);
+                            }}
+                            onStudentEdit={(student) => {
+                              setSelectedStudent(student);
+                              setShowStudentForm(true);
+                            }}
+                            onStudentDelete={handleStudentDeleted}
+                            onGradeEntry={handleGradeEntryClick}
+                            selectedStudent={selectedStudent}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
               </div>
             </div>
 

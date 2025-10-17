@@ -43,7 +43,7 @@ const GradesTable: React.FC = () => {
   const [groups, setGroups] = useState<Group[]>([]);
   const [years, setYears] = useState<Year[]>([]);
   const [criteria, setCriteria] = useState<Criterion[]>([]);
-  const [selectedYear, setSelectedYear] = useState<string>('');
+  const [selectedYear] = useState<string>('2025-2026-fixed'); // Hardcoded year
   const [selectedMonth, setSelectedMonth] = useState<string>(() => 
     localStorage.getItem('gradesTable_selectedMonth') || ''
   );
@@ -96,22 +96,14 @@ const GradesTable: React.FC = () => {
 
   const loadInitialData = async () => {
     try {
-      const [groupsData, yearsData, criteriaData] = await Promise.all([
+      const [groupsData, criteriaData] = await Promise.all([
         api.getGroups(),
-        api.getYears(),
         api.getCriteria()
       ]);
 
-      console.log('Loaded years data:', yearsData);
       setGroups(groupsData);
-      setYears(yearsData);
       setCriteria(criteriaData);
-
-      // Always auto-select the first year (2025-2026)
-      if (yearsData.length > 0) {
-        console.log('Auto-selecting first year:', yearsData[0].year, yearsData[0].id);
-        setSelectedYear(yearsData[0].id);
-      }
+      // Year is hardcoded, no need to load from API
     } catch (error) {
       console.error('Error loading initial data:', error);
     }
@@ -271,14 +263,21 @@ const GradesTable: React.FC = () => {
   };
 
   const saveAllGrades = async () => {
-    if (!selectedYear || !selectedMonth) {
-      alert('Выберите учебный год и месяц');
+    if (!selectedMonth) {
+      alert('Выберите месяц');
+      return;
+    }
+
+    if (!selectedYear) {
+      alert('Учебный год не установлен');
       return;
     }
 
     try {
       setLoading(true);
       let savedCount = 0;
+
+      console.log('Saving all grades with year:', selectedYear, 'month:', selectedMonth);
 
       for (const studentId of Object.keys(gradesData)) {
         const studentGrades = gradesData[studentId];
@@ -295,14 +294,15 @@ const GradesTable: React.FC = () => {
           comment: studentGrades.comment || ''
         };
 
+        console.log('Saving grade for student:', studentId, gradeData);
         await api.saveGrade(gradeData);
         savedCount++;
       }
 
-      alert(`Сохранено оценок для ${savedCount} учеников!`);
+      alert(`✅ Сохранено оценок для ${savedCount} учеников!`);
     } catch (error) {
       console.error('Error saving grades:', error);
-      alert('Ошибка при сохранении оценок');
+      alert('❌ Ошибка при сохранении оценок: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setLoading(false);
     }
@@ -396,7 +396,7 @@ const GradesTable: React.FC = () => {
               backgroundColor: '#f5f5f5',
               color: '#333'
             }}>
-              {years.find(y => y.id === selectedYear)?.year || 'Загрузка...'}
+              2025-2026
             </div>
           </div>
 
@@ -495,15 +495,15 @@ const GradesTable: React.FC = () => {
           
           <button
             onClick={saveAllGrades}
-            disabled={loading || !selectedYear || !selectedMonth}
+            disabled={loading || !selectedMonth}
             style={{
               backgroundColor: '#4CAF50',
               color: 'white',
               border: 'none',
               padding: '0.75rem 1.5rem',
               borderRadius: '4px',
-              cursor: 'pointer',
-              opacity: (loading || !selectedYear || !selectedMonth) ? 0.6 : 1
+              cursor: loading || !selectedMonth ? 'not-allowed' : 'pointer',
+              opacity: (loading || !selectedMonth) ? 0.6 : 1
             }}
           >
             💾 Сохранить все оценки
