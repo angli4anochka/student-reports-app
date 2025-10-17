@@ -17,10 +17,11 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  students Student[]
-  years    Year[]
-  groups   Group[]
-  lessons  Lesson[]
+  students   Student[]
+  years      Year[]
+  groups     Group[]
+  lessons    Lesson[]
+  attendance Attendance[]
 
   @@index([email])
   @@index([role])
@@ -35,8 +36,9 @@ model Group {
   teacherId String
   teacher   User   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
 
-  students Student[]
-  lessons  Lesson[]
+  students   Student[]
+  lessons    Lesson[]
+  attendance Attendance[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -54,11 +56,12 @@ model Student {
 
   teacherId String
   teacher   User   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  
+
   groupId String?
   group   Group? @relation(fields: [groupId], references: [id], onDelete: SetNull)
 
-  grades Grade[]
+  grades     Grade[]
+  attendance Attendance[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -201,7 +204,38 @@ model Lesson {
   @@map("lessons")
 }
 
+model Attendance {
+  id        String @id @default(uuid())
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  date      String // Date in format DD.MM.YYYY
+  status    AttendanceStatus
+
+  teacherId String
+  teacher   User @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  groupId   String?
+  group     Group? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([studentId, date])
+  @@index([studentId])
+  @@index([date])
+  @@index([teacherId])
+  @@index([groupId])
+  @@map("attendance")
+}
+
 enum Role {
   TEACHER
   ADMIN
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
 }

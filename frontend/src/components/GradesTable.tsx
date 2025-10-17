@@ -43,7 +43,7 @@ const GradesTable: React.FC = () => {
   const [groups, setGroups] = useState<Group[]>([]);
   const [years, setYears] = useState<Year[]>([]);
   const [criteria, setCriteria] = useState<Criterion[]>([]);
-  const [selectedYear] = useState<string>('2025-2026-fixed'); // Hardcoded year
+  const [selectedYear, setSelectedYear] = useState<string>(''); // Will be loaded from API
   const [selectedMonth, setSelectedMonth] = useState<string>(() => 
     localStorage.getItem('gradesTable_selectedMonth') || ''
   );
@@ -96,14 +96,25 @@ const GradesTable: React.FC = () => {
 
   const loadInitialData = async () => {
     try {
-      const [groupsData, criteriaData] = await Promise.all([
+      const [groupsData, yearsData, criteriaData] = await Promise.all([
         api.getGroups(),
+        api.getYears(),
         api.getCriteria()
       ]);
 
       setGroups(groupsData);
+      setYears(yearsData);
       setCriteria(criteriaData);
-      // Year is hardcoded, no need to load from API
+
+      // Auto-select year 2025-2026 or first available year
+      const year2025 = yearsData.find((y: any) => y.year === '2025-2026');
+      if (year2025) {
+        console.log('Found year 2025-2026:', year2025.id);
+        setSelectedYear(year2025.id);
+      } else if (yearsData.length > 0) {
+        console.log('Using first year:', yearsData[0].year, yearsData[0].id);
+        setSelectedYear(yearsData[0].id);
+      }
     } catch (error) {
       console.error('Error loading initial data:', error);
     }
@@ -396,7 +407,7 @@ const GradesTable: React.FC = () => {
               backgroundColor: '#f5f5f5',
               color: '#333'
             }}>
-              2025-2026
+              {years.find(y => y.id === selectedYear)?.year || 'Загрузка...'}
             </div>
           </div>
 
