@@ -33,6 +33,7 @@ import StudentReport from './StudentReport';
 import LessonsSchedule from './LessonsSchedule';
 import ScheduleCalendar from './ScheduleCalendar';
 import AdminPanel from './AdminPanel';
+import TeacherSchedule from './TeacherSchedule';
 import { useAuth } from '../context/AuthContext';
 
 const Dashboard: React.FC = () => {
@@ -396,6 +397,11 @@ const Dashboard: React.FC = () => {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Teacher Schedule Section */}
+          <div style={{ marginTop: '3rem' }}>
+            <TeacherSchedule />
           </div>
         </>
       )}
