@@ -13,22 +13,23 @@ interface Group {
   teacherId: string;
 }
 
-interface ScheduleSettings {
-  groupId: string;
-  weekdays: string;
+interface ScheduleCell {
+  teacherId: string;
+  day: number;
+  time: string;
+  groupName: string;
 }
 
 const TeacherSchedule: React.FC = () => {
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
-  const [scheduleSettings, setScheduleSettings] = useState<{ [groupId: string]: ScheduleSettings }>({});
+  const [schedule, setSchedule] = useState<{ [key: string]: ScheduleCell }>({});
   const [loading, setLoading] = useState(true);
+  const [editingCell, setEditingCell] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
 
   const WEEKDAYS = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница'];
-  const TIMES = [
-    '11:00', '12:00', '13:00', '14:00', '15:00',
-    '16:00', '17:00', '18:00', '19:00'
-  ];
+  const TIMES = ['11', '12', '13', '14', '15', '16', '17', '18', '19'];
 
   useEffect(() => {
     loadData();
@@ -46,19 +47,11 @@ const TeacherSchedule: React.FC = () => {
       const groupsData = await api.getGroups();
       setGroups(groupsData);
 
-      // Load schedule settings for each group
-      const settings: { [groupId: string]: ScheduleSettings } = {};
-      for (const group of groupsData) {
-        try {
-          const groupSettings = await api.getGroupScheduleSettings(group.id);
-          if (groupSettings.weekdays) {
-            settings[group.id] = groupSettings;
-          }
-        } catch (error) {
-          // Group doesn't have settings yet
-        }
+      // Load schedule from localStorage
+      const savedSchedule = localStorage.getItem('teacher_schedule');
+      if (savedSchedule) {
+        setSchedule(JSON.parse(savedSchedule));
       }
-      setScheduleSettings(settings);
     } catch (error) {
       console.error('Error loading schedule data:', error);
     } finally {
@@ -66,28 +59,49 @@ const TeacherSchedule: React.FC = () => {
     }
   };
 
-  const getTeacherGroups = (teacherId: string) => {
-    return groups.filter(g => g.teacherId === teacherId);
+  const getCellKey = (teacherId: string, day: number, time: string) => {
+    return `${teacherId}-${day}-${time}`;
   };
 
-  const isTeacherBusy = (teacherId: string, dayIndex: number, timeSlot: string) => {
-    const teacherGroups = getTeacherGroups(teacherId);
+  const getCellValue = (teacherId: string, day: number, time: string) => {
+    const key = getCellKey(teacherId, day, time);
+    return schedule[key]?.groupName || '';
+  };
 
-    for (const group of teacherGroups) {
-      const settings = scheduleSettings[group.id];
-      if (settings && settings.weekdays) {
-        const weekdays = settings.weekdays.split(',').map(Number);
-        // dayIndex: 0=Пн, 1=Вт, 2=Ср, 3=Чт, 4=Пт
-        // weekdays: 1=Пн, 2=Вт, 3=Ср, 4=Чт, 5=Пт
-        const mappedDay = dayIndex + 1;
+  const handleCellClick = (teacherId: string, day: number, time: string) => {
+    const key = getCellKey(teacherId, day, time);
+    setEditingCell(key);
+    setEditValue(getCellValue(teacherId, day, time));
+  };
 
-        if (weekdays.includes(mappedDay)) {
-          return group.name;
-        }
-      }
+  const handleCellSave = (teacherId: string, day: number, time: string) => {
+    const key = getCellKey(teacherId, day, time);
+    const newSchedule = { ...schedule };
+
+    if (editValue.trim()) {
+      newSchedule[key] = {
+        teacherId,
+        day,
+        time,
+        groupName: editValue.trim()
+      };
+    } else {
+      delete newSchedule[key];
     }
 
-    return null;
+    setSchedule(newSchedule);
+    localStorage.setItem('teacher_schedule', JSON.stringify(newSchedule));
+    setEditingCell(null);
+    setEditValue('');
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent, teacherId: string, day: number, time: string) => {
+    if (e.key === 'Enter') {
+      handleCellSave(teacherId, day, time);
+    } else if (e.key === 'Escape') {
+      setEditingCell(null);
+      setEditValue('');
+    }
   };
 
   if (loading) {
@@ -118,89 +132,109 @@ const TeacherSchedule: React.FC = () => {
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table style={{
-              width: '100%',
-              borderCollapse: 'collapse',
-              fontSize: '0.9rem'
-            }}>
-              <thead>
-                <tr>
-                  <th style={{
-                    border: '1px solid #ddd',
-                    padding: '0.75rem',
-                    backgroundColor: '#e3f2fd',
-                    textAlign: 'left',
-                    minWidth: '150px',
-                    position: 'sticky',
-                    left: 0,
-                    zIndex: 10
-                  }}>
-                    Учитель
-                  </th>
-                  {WEEKDAYS.map(day => (
-                    <th key={day} style={{
-                      border: '1px solid #ddd',
-                      padding: '0.75rem',
-                      backgroundColor: '#f8f9fa',
-                      textAlign: 'center',
-                      minWidth: '120px'
-                    }}>
-                      {day}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {teachers.map(teacher => (
-                  <tr key={teacher.id}>
-                    <td style={{
-                      border: '1px solid #ddd',
-                      padding: '0.75rem',
-                      fontWeight: '600',
-                      backgroundColor: '#f0f8ff',
-                      position: 'sticky',
-                      left: 0,
-                      zIndex: 5
-                    }}>
-                      {teacher.fullName}
-                    </td>
-                    {WEEKDAYS.map((day, dayIndex) => {
-                      const groupName = isTeacherBusy(teacher.id, dayIndex, '');
-
-                      return (
-                        <td key={day} style={{
+            {teachers.map(teacher => (
+              <div key={teacher.id} style={{ marginBottom: '2rem' }}>
+                <h3 style={{
+                  backgroundColor: '#e3f2fd',
+                  padding: '0.75rem',
+                  margin: '0 0 0.5rem 0',
+                  borderRadius: '4px',
+                  color: '#1976d2'
+                }}>
+                  👤 {teacher.fullName}
+                </h3>
+                <table style={{
+                  width: '100%',
+                  borderCollapse: 'collapse',
+                  fontSize: '0.85rem'
+                }}>
+                  <thead>
+                    <tr>
+                      <th style={{
+                        border: '1px solid #ddd',
+                        padding: '0.5rem',
+                        backgroundColor: '#f8f9fa',
+                        textAlign: 'center',
+                        minWidth: '60px'
+                      }}>
+                        Время
+                      </th>
+                      {WEEKDAYS.map(day => (
+                        <th key={day} style={{
+                          border: '1px solid #ddd',
+                          padding: '0.5rem',
+                          backgroundColor: '#f8f9fa',
+                          textAlign: 'center',
+                          minWidth: '100px'
+                        }}>
+                          {day}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {TIMES.map(time => (
+                      <tr key={time}>
+                        <td style={{
                           border: '1px solid #ddd',
                           padding: '0.5rem',
                           textAlign: 'center',
-                          backgroundColor: groupName ? '#c8e6c9' : '#fff',
-                          verticalAlign: 'middle'
+                          fontWeight: '600',
+                          backgroundColor: '#f0f8ff'
                         }}>
-                          {groupName ? (
-                            <div>
-                              <div style={{
-                                fontWeight: 'bold',
-                                color: '#2e7d32',
-                                marginBottom: '0.25rem'
-                              }}>
-                                ✓ Занят
-                              </div>
-                              <div style={{
-                                fontSize: '0.85rem',
-                                color: '#555'
-                              }}>
-                                {groupName}
-                              </div>
-                            </div>
-                          ) : (
-                            <span style={{ color: '#999' }}>—</span>
-                          )}
+                          {time}:00
                         </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                        {WEEKDAYS.map((day, dayIndex) => {
+                          const key = getCellKey(teacher.id, dayIndex, time);
+                          const cellValue = getCellValue(teacher.id, dayIndex, time);
+                          const isEditing = editingCell === key;
+
+                          return (
+                            <td
+                              key={day}
+                              onClick={() => !isEditing && handleCellClick(teacher.id, dayIndex, time)}
+                              style={{
+                                border: '1px solid #ddd',
+                                padding: '0.5rem',
+                                textAlign: 'center',
+                                backgroundColor: cellValue ? '#fff3cd' : '#fff',
+                                cursor: 'pointer',
+                                verticalAlign: 'middle'
+                              }}
+                            >
+                              {isEditing ? (
+                                <input
+                                  type="text"
+                                  value={editValue}
+                                  onChange={(e) => setEditValue(e.target.value)}
+                                  onBlur={() => handleCellSave(teacher.id, dayIndex, time)}
+                                  onKeyDown={(e) => handleKeyDown(e, teacher.id, dayIndex, time)}
+                                  autoFocus
+                                  style={{
+                                    width: '100%',
+                                    padding: '0.25rem',
+                                    border: '1px solid #2196F3',
+                                    borderRadius: '2px',
+                                    fontSize: '0.85rem'
+                                  }}
+                                />
+                              ) : (
+                                <span style={{
+                                  color: cellValue ? '#333' : '#999',
+                                  fontSize: '0.85rem'
+                                }}>
+                                  {cellValue || '—'}
+                                </span>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
           </div>
         )}
 
@@ -211,7 +245,7 @@ const TeacherSchedule: React.FC = () => {
           borderRadius: '4px',
           borderLeft: '4px solid #2196F3'
         }}>
-          <strong>Примечание:</strong> Расписание формируется на основе выбранных дней недели для каждой группы в разделе "Календарь посещаемости".
+          <strong>Примечание:</strong> Кликните на ячейку, чтобы добавить или изменить название класса. Enter - сохранить, Escape - отменить.
         </div>
       </div>
     </div>
