@@ -219,6 +219,11 @@ class ApiService {
     return this.request(`/lessons/${id}`, { method: 'DELETE' });
   }
 
+  // Teachers endpoints
+  async getTeachers() {
+    return this.request<any[]>('/teachers');
+  }
+
   // Admin endpoints
   async getAdminUsers() {
     return this.request<any[]>('/admin/users');

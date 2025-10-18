@@ -28,7 +28,7 @@ const TeacherSchedule: React.FC = () => {
   const [editingCell, setEditingCell] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
 
-  const WEEKDAYS = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница'];
+  const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт'];
   const TIMES = ['11', '12', '13', '14', '15', '16', '17', '18', '19'];
 
   useEffect(() => {
@@ -39,9 +39,9 @@ const TeacherSchedule: React.FC = () => {
     try {
       setLoading(true);
 
-      // Load teachers (admin users endpoint)
-      const usersData = await api.getAdminUsers();
-      setTeachers(usersData.filter((u: any) => u.role === 'TEACHER'));
+      // Load teachers
+      const teachersData = await api.getTeachers();
+      setTeachers(teachersData);
 
       // Load groups
       const groupsData = await api.getGroups();
@@ -109,16 +109,16 @@ const TeacherSchedule: React.FC = () => {
   }
 
   return (
-    <div style={{ padding: '2rem' }}>
+    <div>
       <div style={{
         backgroundColor: 'white',
         borderRadius: '8px',
-        padding: '2rem',
+        padding: '1rem',
         boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
       }}>
-        <h2 style={{ color: '#2196F3', marginBottom: '2rem' }}>
-          📅 Расписание занятости учителей
-        </h2>
+        <h3 style={{ color: '#2196F3', marginBottom: '1rem', fontSize: '1.1rem' }}>
+          📅 Расписание учителей
+        </h3>
 
         {teachers.length === 0 ? (
           <div style={{
@@ -133,39 +133,41 @@ const TeacherSchedule: React.FC = () => {
         ) : (
           <div style={{ overflowX: 'auto' }}>
             {teachers.map(teacher => (
-              <div key={teacher.id} style={{ marginBottom: '2rem' }}>
-                <h3 style={{
+              <div key={teacher.id} style={{ marginBottom: '1rem' }}>
+                <h4 style={{
                   backgroundColor: '#e3f2fd',
-                  padding: '0.75rem',
-                  margin: '0 0 0.5rem 0',
+                  padding: '0.4rem 0.6rem',
+                  margin: '0 0 0.3rem 0',
                   borderRadius: '4px',
-                  color: '#1976d2'
+                  color: '#1976d2',
+                  fontSize: '0.9rem'
                 }}>
                   👤 {teacher.fullName}
-                </h3>
+                </h4>
                 <table style={{
                   width: '100%',
                   borderCollapse: 'collapse',
-                  fontSize: '0.85rem'
+                  fontSize: '0.75rem'
                 }}>
                   <thead>
                     <tr>
                       <th style={{
                         border: '1px solid #ddd',
-                        padding: '0.5rem',
+                        padding: '0.25rem',
                         backgroundColor: '#f8f9fa',
                         textAlign: 'center',
-                        minWidth: '60px'
+                        width: '45px',
+                        fontSize: '0.7rem'
                       }}>
                         Время
                       </th>
                       {WEEKDAYS.map(day => (
                         <th key={day} style={{
                           border: '1px solid #ddd',
-                          padding: '0.5rem',
+                          padding: '0.25rem',
                           backgroundColor: '#f8f9fa',
                           textAlign: 'center',
-                          minWidth: '100px'
+                          fontSize: '0.7rem'
                         }}>
                           {day}
                         </th>
@@ -177,10 +179,11 @@ const TeacherSchedule: React.FC = () => {
                       <tr key={time}>
                         <td style={{
                           border: '1px solid #ddd',
-                          padding: '0.5rem',
+                          padding: '0.2rem',
                           textAlign: 'center',
                           fontWeight: '600',
-                          backgroundColor: '#f0f8ff'
+                          backgroundColor: '#f0f8ff',
+                          fontSize: '0.7rem'
                         }}>
                           {time}:00
                         </td>
@@ -195,7 +198,7 @@ const TeacherSchedule: React.FC = () => {
                               onClick={() => !isEditing && handleCellClick(teacher.id, dayIndex, time)}
                               style={{
                                 border: '1px solid #ddd',
-                                padding: '0.5rem',
+                                padding: '0.2rem',
                                 textAlign: 'center',
                                 backgroundColor: cellValue ? '#fff3cd' : '#fff',
                                 cursor: 'pointer',
@@ -212,16 +215,16 @@ const TeacherSchedule: React.FC = () => {
                                   autoFocus
                                   style={{
                                     width: '100%',
-                                    padding: '0.25rem',
+                                    padding: '0.15rem',
                                     border: '1px solid #2196F3',
                                     borderRadius: '2px',
-                                    fontSize: '0.85rem'
+                                    fontSize: '0.7rem'
                                   }}
                                 />
                               ) : (
                                 <span style={{
                                   color: cellValue ? '#333' : '#999',
-                                  fontSize: '0.85rem'
+                                  fontSize: '0.7rem'
                                 }}>
                                   {cellValue || '—'}
                                 </span>
@@ -239,13 +242,14 @@ const TeacherSchedule: React.FC = () => {
         )}
 
         <div style={{
-          marginTop: '2rem',
-          padding: '1rem',
+          marginTop: '0.5rem',
+          padding: '0.5rem',
           backgroundColor: '#e3f2fd',
           borderRadius: '4px',
-          borderLeft: '4px solid #2196F3'
+          borderLeft: '4px solid #2196F3',
+          fontSize: '0.75rem'
         }}>
-          <strong>Примечание:</strong> Кликните на ячейку, чтобы добавить или изменить название класса. Enter - сохранить, Escape - отменить.
+          <strong>Примечание:</strong> Кликните на ячейку для редактирования. Enter - сохранить, Escape - отменить.
         </div>
       </div>
     </div>

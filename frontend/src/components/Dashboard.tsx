@@ -365,11 +365,11 @@ const Dashboard: React.FC = () => {
 
             <div>
               {selectedStudent && (
-                <div>
+                <div style={{ marginBottom: '2rem' }}>
                   <h3>Информация об ученике</h3>
-                  <div style={{ 
-                    backgroundColor: '#f5f5f5', 
-                    padding: '1rem', 
+                  <div style={{
+                    backgroundColor: '#f5f5f5',
+                    padding: '1rem',
                     borderRadius: '4px',
                     marginBottom: '1rem'
                   }}>
@@ -379,14 +379,14 @@ const Dashboard: React.FC = () => {
                       <p><strong>Заметки:</strong> {selectedStudent.notes}</p>
                     )}
                   </div>
-                  
+
                   <button
                     onClick={() => handleGradeEntryClick(selectedStudent)}
-                    style={{ 
-                      backgroundColor: '#FF9800', 
-                      color: 'white', 
-                      border: 'none', 
-                      padding: '0.5rem 1rem', 
+                    style={{
+                      backgroundColor: '#FF9800',
+                      color: 'white',
+                      border: 'none',
+                      padding: '0.5rem 1rem',
                       borderRadius: '4px',
                       cursor: 'pointer',
                       width: '100%'
@@ -396,12 +396,12 @@ const Dashboard: React.FC = () => {
                   </button>
                 </div>
               )}
-            </div>
-          </div>
 
-          {/* Teacher Schedule Section */}
-          <div style={{ marginTop: '3rem' }}>
-            <TeacherSchedule />
+              {/* Teacher Schedule Section */}
+              <div>
+                <TeacherSchedule />
+              </div>
+            </div>
           </div>
         </>
       )}
