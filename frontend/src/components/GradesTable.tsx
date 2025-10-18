@@ -62,6 +62,9 @@ const GradesTable: React.FC = () => {
     'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь'
   ];
 
+  // Debounce timer for auto-save
+  const saveTimerRef = React.useRef<{ [key: string]: NodeJS.Timeout }>({});
+
   useEffect(() => {
     console.log('Component mounted, loading initial data...');
     loadInitialData();
@@ -241,7 +244,7 @@ const GradesTable: React.FC = () => {
     }
   };
 
-  const updateComment = async (studentId: string, comment: string) => {
+  const updateComment = (studentId: string, comment: string) => {
     // Get current student data before updating state
     const currentStudentData = gradesData[studentId] || {};
     const updatedStudentData = { ...currentStudentData, comment };
@@ -251,28 +254,35 @@ const GradesTable: React.FC = () => {
       [studentId]: updatedStudentData
     }));
 
-    // Auto-save to database if year and month are selected
+    // Clear existing timer for this student
+    if (saveTimerRef.current[studentId]) {
+      clearTimeout(saveTimerRef.current[studentId]);
+    }
+
+    // Set new timer - save after 1 second of no typing
     if (selectedYear && selectedMonth) {
-      try {
-        const criteriaGrades = criteria.map(criterion => ({
-          criterionId: criterion.id,
-          value: (updatedStudentData[criterion.id] as number) || 1
-        }));
+      saveTimerRef.current[studentId] = setTimeout(async () => {
+        try {
+          const criteriaGrades = criteria.map(criterion => ({
+            criterionId: criterion.id,
+            value: (updatedStudentData[criterion.id] as number) || 1
+          }));
 
-        const gradeData = {
-          studentId,
-          yearId: selectedYear,
-          month: selectedMonth,
-          criteriaGrades: criteriaGrades,
-          comment: comment
-        };
+          const gradeData = {
+            studentId,
+            yearId: selectedYear,
+            month: selectedMonth,
+            criteriaGrades: criteriaGrades,
+            comment: comment
+          };
 
-        console.log('Auto-saving comment:', gradeData);
-        await api.saveGrade(gradeData);
-        console.log('Comment saved successfully');
-      } catch (error) {
-        console.error('Error auto-saving comment:', error);
-      }
+          console.log('Auto-saving comment (debounced):', gradeData);
+          await api.saveGrade(gradeData);
+          console.log('Comment saved successfully');
+        } catch (error) {
+          console.error('Error auto-saving comment:', error);
+        }
+      }, 1000); // Wait 1 second after last keystroke
     }
   };
 
