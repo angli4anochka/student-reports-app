@@ -15,6 +15,9 @@ import exportRoutes from './routes/export';
 import importRoutes from './routes/import';
 import teacherRoutes from './routes/teachers';
 import adminRoutes from './routes/admin';
+import attendanceRoutes from './routes/attendance';
+import lessonsRoutes from './routes/lessons';
+import groupScheduleSettingsRoutes from './routes/groupScheduleSettings';
 
 dotenv.config();
 
@@ -48,6 +51,9 @@ app.use('/api/export', exportRoutes);
 app.use('/api/import', importRoutes);
 app.use('/api/teachers', teacherRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/attendance', attendanceRoutes);
+app.use('/api/lessons', lessonsRoutes);
+app.use('/api/group-schedule-settings', groupScheduleSettingsRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
