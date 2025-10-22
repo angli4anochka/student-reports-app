@@ -19,13 +19,6 @@ interface Student {
   updatedAt: string;
 }
 
-interface Year {
-  id: string;
-  year: string;
-  months: string;
-  createdBy: string;
-}
-
 interface Criterion {
   id: string;
   name: string;
@@ -52,13 +45,18 @@ interface GradeFormData {
 
 interface GradeEntryProps {
   student: Student;
-  years: Year[];
   onClose: () => void;
 }
 
-const GradeEntry: React.FC<GradeEntryProps> = ({ student, years, onClose }) => {
+// Константа учебного года 2025-2026
+const ACADEMIC_YEAR_2025 = {
+  id: 'year-2025-2026',
+  year: '2025-2026',
+  months: ['Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь', 'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь']
+};
+
+const GradeEntry: React.FC<GradeEntryProps> = ({ student, onClose }) => {
   const [criteria, setCriteria] = useState<Criterion[]>([]);
-  const [selectedYear, setSelectedYear] = useState<Year | null>(null);
   const [selectedMonth, setSelectedMonth] = useState('');
   const [grades, setGrades] = useState<{ [criterionId: string]: number }>({});
   const [attendance, setAttendance] = useState<number | ''>('');
@@ -72,10 +70,7 @@ const GradeEntry: React.FC<GradeEntryProps> = ({ student, years, onClose }) => {
 
   useEffect(() => {
     loadCriteria();
-    if (years.length > 0) {
-      setSelectedYear(years[0]);
-    }
-  }, [years]);
+  }, []);
 
   useEffect(() => {
     calculateTotal();
@@ -128,8 +123,8 @@ const GradeEntry: React.FC<GradeEntryProps> = ({ student, years, onClose }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedYear || !selectedMonth) {
-      setError('Выберите учебный год и месяц');
+    if (!selectedMonth) {
+      setError('Выберите месяц');
       return;
     }
 
@@ -139,7 +134,7 @@ const GradeEntry: React.FC<GradeEntryProps> = ({ student, years, onClose }) => {
     try {
       const formData: GradeFormData = {
         studentId: student.id,
-        yearId: selectedYear.id,
+        yearId: ACADEMIC_YEAR_2025.id,
         month: selectedMonth,
         criteria: Object.entries(grades).map(([criterionId, value]) => ({
           criterionId,
@@ -161,14 +156,6 @@ const GradeEntry: React.FC<GradeEntryProps> = ({ student, years, onClose }) => {
     }
   };
 
-  const getMonths = (): string[] => {
-    if (!selectedYear) return [];
-    try {
-      return JSON.parse(selectedYear.months);
-    } catch {
-      return [];
-    }
-  };
 
   return (
     <div style={{
@@ -214,30 +201,18 @@ const GradeEntry: React.FC<GradeEntryProps> = ({ student, years, onClose }) => {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
             <div>
               <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                Учебный год *
+                Учебный год
               </label>
-              <select
-                value={selectedYear?.id || ''}
-                onChange={(e) => {
-                  const year = years.find(y => y.id === e.target.value);
-                  setSelectedYear(year || null);
-                  setSelectedMonth('');
-                }}
-                required
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                }}
-              >
-                <option value="">Выберите год</option>
-                {years.map((year) => (
-                  <option key={year.id} value={year.id}>
-                    {year.year}
-                  </option>
-                ))}
-              </select>
+              <div style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+                backgroundColor: '#f5f5f5',
+                color: '#666'
+              }}>
+                {ACADEMIC_YEAR_2025.year}
+              </div>
             </div>
 
             <div>
@@ -256,7 +231,7 @@ const GradeEntry: React.FC<GradeEntryProps> = ({ student, years, onClose }) => {
                 }}
               >
                 <option value="">Выберите месяц</option>
-                {getMonths().map((month) => (
+                {ACADEMIC_YEAR_2025.months.map((month) => (
                   <option key={month} value={month}>
                     {month}
                   </option>

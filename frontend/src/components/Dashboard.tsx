@@ -19,12 +19,6 @@ interface Student {
   updatedAt: string;
 }
 
-interface Year {
-  id: string;
-  year: string;
-  months: string;
-  createdBy: string;
-}
 import StudentList from './StudentList';
 import StudentForm from './StudentForm';
 import GradeEntry from './GradeEntry';
@@ -39,7 +33,6 @@ import { useAuth } from '../context/AuthContext';
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const [students, setStudents] = useState<Student[]>([]);
-  const [years, setYears] = useState<Year[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [showStudentForm, setShowStudentForm] = useState(false);
   const [showGradeEntry, setShowGradeEntry] = useState(false);
@@ -69,12 +62,8 @@ const Dashboard: React.FC = () => {
 
   const loadData = async () => {
     try {
-      const [studentsData, yearsData] = await Promise.all([
-        api.getStudents(filters),
-        api.getYears(),
-      ]);
+      const studentsData = await api.getStudents(filters);
       setStudents(studentsData);
-      setYears(yearsData);
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -437,7 +426,6 @@ const Dashboard: React.FC = () => {
       {showGradeEntry && selectedStudent && (
         <GradeEntry
           student={selectedStudent}
-          years={years}
           onClose={() => setShowGradeEntry(false)}
         />
       )}
@@ -445,7 +433,6 @@ const Dashboard: React.FC = () => {
       {showStudentReport && selectedStudent && (
         <StudentReport
           student={selectedStudent}
-          years={years}
           onClose={() => {
             setShowStudentReport(false);
             setSelectedStudent(null);

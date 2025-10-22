@@ -160,18 +160,6 @@ class ApiService {
     });
   }
 
-  // Years endpoints
-  async getYears() {
-    return this.request<any[]>('/years');
-  }
-
-  async createYear(data: { year: string; months?: string[] }) {
-    return this.request<any>('/years', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
   // Grades endpoints
   async getGrades(filters: { studentId?: string; yearId?: string; month?: string } = {}) {
     const params = new URLSearchParams();

@@ -38,12 +38,18 @@ interface GradeData {
   };
 }
 
+// Константа учебного года (один на всю систему)
+const ACADEMIC_YEAR_2025 = {
+  id: 'year-2025-2026',
+  year: '2025-2026',
+  months: 'Сентябрь,Октябрь,Ноябрь,Декабрь,Январь,Февраль,Март,Апрель,Май,Июнь'
+};
+
 const GradesTable: React.FC = () => {
   const [students, setStudents] = useState<Student[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
-  const [years, setYears] = useState<Year[]>([]);
   const [criteria, setCriteria] = useState<Criterion[]>([]);
-  const [selectedYear, setSelectedYear] = useState<string>(''); // Will be loaded from API
+  const selectedYear = ACADEMIC_YEAR_2025.id; // Всегда используем текущий учебный год
   const [selectedMonth, setSelectedMonth] = useState<string>(() => 
     localStorage.getItem('gradesTable_selectedMonth') || ''
   );
@@ -100,25 +106,14 @@ const GradesTable: React.FC = () => {
 
   const loadInitialData = async () => {
     try {
-      const [groupsData, yearsData, criteriaData] = await Promise.all([
+      const [groupsData, criteriaData] = await Promise.all([
         api.getGroups(),
-        api.getYears(),
         api.getCriteria()
       ]);
 
       setGroups(groupsData);
-      setYears(yearsData);
       setCriteria(criteriaData);
-
-      // Auto-select year 2025-2026 or first available year
-      const year2025 = yearsData.find((y: any) => y.year === '2025-2026');
-      if (year2025) {
-        console.log('Found year 2025-2026:', year2025.id);
-        setSelectedYear(year2025.id);
-      } else if (yearsData.length > 0) {
-        console.log('Using first year:', yearsData[0].year, yearsData[0].id);
-        setSelectedYear(yearsData[0].id);
-      }
+      console.log('Using academic year:', ACADEMIC_YEAR_2025.year);
     } catch (error) {
       console.error('Error loading initial data:', error);
     }
@@ -435,7 +430,7 @@ const GradesTable: React.FC = () => {
               backgroundColor: '#f5f5f5',
               color: '#333'
             }}>
-              {years.find(y => y.id === selectedYear)?.year || 'Загрузка...'}
+              {ACADEMIC_YEAR_2025.year}
             </div>
           </div>
 

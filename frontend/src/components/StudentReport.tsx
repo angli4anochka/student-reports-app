@@ -19,44 +19,31 @@ interface Student {
   updatedAt: string;
 }
 
-interface Year {
-  id: string;
-  year: string;
-  months: string;
-  createdBy: string;
-}
-
 interface StudentReportProps {
   student: Student;
-  years: Year[];
   onClose: () => void;
 }
 
-const StudentReport: React.FC<StudentReportProps> = ({ student, years, onClose }) => {
-  const [selectedYear, setSelectedYear] = useState<string>('');
+// Константа учебного года 2025-2026
+const ACADEMIC_YEAR_2025 = {
+  id: 'year-2025-2026',
+  year: '2025-2026',
+  months: ['Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь', 'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь']
+};
+
+const StudentReport: React.FC<StudentReportProps> = ({ student, onClose }) => {
   const [selectedMonth, setSelectedMonth] = useState<string>('');
   const [grades, setGrades] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const MONTHS = [
-    'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь',
-    'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь'
-  ];
-
-  useEffect(() => {
-    if (years.length > 0) {
-      setSelectedYear(years[0].id);
-    }
-  }, [years]);
-
   const loadReport = async () => {
-    if (!selectedYear || !selectedMonth) return;
-    
+    if (!selectedMonth) return;
+
     setLoading(true);
     try {
       const gradesData = await api.getGrades({
         studentId: student.id,
-        yearId: selectedYear,
+        yearId: ACADEMIC_YEAR_2025.id,
         month: selectedMonth
       });
       setGrades(gradesData);
@@ -80,7 +67,7 @@ const StudentReport: React.FC<StudentReportProps> = ({ student, years, onClose }
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
           <h4 style={{ margin: 0, color: '#2196F3' }}>
-            {grade.month} {years.find(y => y.id === grade.yearId)?.year}
+            {grade.month} {ACADEMIC_YEAR_2025.year}
           </h4>
           <div style={{
             backgroundColor: grade.grade === 'A' ? '#4CAF50' : 
@@ -200,25 +187,18 @@ const StudentReport: React.FC<StudentReportProps> = ({ student, years, onClose }
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
           <div>
             <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-              Учебный год *
+              Учебный год
             </label>
-            <select
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-              }}
-            >
-              <option value="">Выберите год</option>
-              {years.map((year) => (
-                <option key={year.id} value={year.id}>
-                  {year.year}
-                </option>
-              ))}
-            </select>
+            <div style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: '1px solid #ddd',
+              borderRadius: '4px',
+              backgroundColor: '#f5f5f5',
+              color: '#666'
+            }}>
+              {ACADEMIC_YEAR_2025.year}
+            </div>
           </div>
 
           <div>
@@ -236,7 +216,7 @@ const StudentReport: React.FC<StudentReportProps> = ({ student, years, onClose }
               }}
             >
               <option value="">Выберите месяц</option>
-              {MONTHS.map((month) => (
+              {ACADEMIC_YEAR_2025.months.map((month) => (
                 <option key={month} value={month}>
                   {month}
                 </option>
@@ -247,16 +227,16 @@ const StudentReport: React.FC<StudentReportProps> = ({ student, years, onClose }
           <div style={{ alignSelf: 'flex-end' }}>
             <button
               onClick={loadReport}
-              disabled={loading || !selectedYear || !selectedMonth}
+              disabled={loading || !selectedMonth}
               style={{
                 width: '100%',
                 padding: '0.75rem',
-                backgroundColor: (!selectedYear || !selectedMonth) ? '#ccc' : '#2196F3',
+                backgroundColor: !selectedMonth ? '#ccc' : '#2196F3',
                 color: 'white',
                 border: 'none',
                 borderRadius: '4px',
-                cursor: (!selectedYear || !selectedMonth) ? 'not-allowed' : 'pointer',
-                opacity: (!selectedYear || !selectedMonth) ? 0.6 : 1
+                cursor: !selectedMonth ? 'not-allowed' : 'pointer',
+                opacity: !selectedMonth ? 0.6 : 1
               }}
             >
               {loading ? 'Загрузка...' : 'Загрузить отчет'}
@@ -265,7 +245,7 @@ const StudentReport: React.FC<StudentReportProps> = ({ student, years, onClose }
         </div>
 
         <div>
-          {grades.length === 0 && !loading && selectedYear && selectedMonth && (
+          {grades.length === 0 && !loading && selectedMonth && (
             <div style={{
               textAlign: 'center',
               padding: '2rem',
