@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
-import AddTeacherModal from './AddTeacherModal';
 
 interface Teacher {
   id: string;
@@ -28,7 +27,6 @@ const TeacherSchedule: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [editingCell, setEditingCell] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
-  const [showAddTeacher, setShowAddTeacher] = useState(false);
   const [selectedTeacherIndex, setSelectedTeacherIndex] = useState(0);
 
   const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт'];
@@ -119,31 +117,9 @@ const TeacherSchedule: React.FC = () => {
         padding: '1rem',
         boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
       }}>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '1rem'
-        }}>
-          <h3 style={{ color: '#2196F3', margin: 0, fontSize: '1.1rem' }}>
-            📅 Расписание учителей
-          </h3>
-          <button
-            onClick={() => setShowAddTeacher(true)}
-            style={{
-              backgroundColor: '#4CAF50',
-              color: 'white',
-              border: 'none',
-              padding: '0.5rem 1rem',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '0.9rem',
-              fontWeight: '500'
-            }}
-          >
-            + Добавить учителя
-          </button>
-        </div>
+        <h3 style={{ color: '#2196F3', marginBottom: '1rem', fontSize: '1.1rem' }}>
+          📅 Расписание учителей
+        </h3>
 
         {teachers.length === 0 ? (
           <div style={{
@@ -341,16 +317,6 @@ const TeacherSchedule: React.FC = () => {
           <strong>Примечание:</strong> Кликните на ячейку для редактирования. Enter - сохранить, Escape - отменить.
         </div>
       </div>
-
-      {showAddTeacher && (
-        <AddTeacherModal
-          onClose={() => setShowAddTeacher(false)}
-          onTeacherAdded={() => {
-            loadData();
-            setShowAddTeacher(false);
-          }}
-        />
-      )}
     </div>
   );
 };

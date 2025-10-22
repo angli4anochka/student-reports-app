@@ -152,6 +152,26 @@ const Login: React.FC = () => {
           Email: teacher@demo.com<br />
           Пароль: demo123
         </div>
+
+        <div style={{ marginTop: '1rem', textAlign: 'center', fontSize: '0.875rem' }}>
+          Нужно создать первого админа?{' '}
+          <button
+            type="button"
+            onClick={() => navigate('/create-first-admin')}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#ff9800',
+              cursor: 'pointer',
+              textDecoration: 'underline',
+              padding: 0,
+              font: 'inherit',
+              fontWeight: '600'
+            }}
+          >
+            Создать администратора
+          </button>
+        </div>
       </div>
     </div>
   );

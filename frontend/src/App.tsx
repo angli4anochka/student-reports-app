@@ -5,6 +5,7 @@ import Layout from './components/Layout';
 import Login from './components/Login';
 import Register from './components/Register';
 import Dashboard from './components/Dashboard';
+import CreateFirstAdmin from './components/CreateFirstAdmin';
 
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -30,6 +31,7 @@ const AppContent: React.FC = () => {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/create-first-admin" element={<CreateFirstAdmin />} />
       <Route
         path="/"
         element={
