@@ -56,6 +56,14 @@ const Dashboard: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    // Изначально все группы скрыты
+    if (students.length > 0) {
+      const allGroups = Array.from(new Set(students.map(s => s.group?.name).filter(Boolean))) as string[];
+      setCollapsedGroups(new Set(allGroups));
+    }
+  }, [students.length]);
+
+  useEffect(() => {
     localStorage.setItem('dashboard_activeTab', activeTab);
   }, [activeTab]);
 

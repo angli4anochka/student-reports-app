@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
+import AddTeacherModal from './AddTeacherModal';
 
 interface Teacher {
   id: string;
@@ -27,6 +28,8 @@ const TeacherSchedule: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [editingCell, setEditingCell] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
+  const [showAddTeacher, setShowAddTeacher] = useState(false);
+  const [selectedTeacherIndex, setSelectedTeacherIndex] = useState(0);
 
   const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт'];
   const TIMES = ['11', '12', '13', '14', '15', '16', '17', '18', '19'];
@@ -116,9 +119,31 @@ const TeacherSchedule: React.FC = () => {
         padding: '1rem',
         boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
       }}>
-        <h3 style={{ color: '#2196F3', marginBottom: '1rem', fontSize: '1.1rem' }}>
-          📅 Расписание учителей
-        </h3>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '1rem'
+        }}>
+          <h3 style={{ color: '#2196F3', margin: 0, fontSize: '1.1rem' }}>
+            📅 Расписание учителей
+          </h3>
+          <button
+            onClick={() => setShowAddTeacher(true)}
+            style={{
+              backgroundColor: '#4CAF50',
+              color: 'white',
+              border: 'none',
+              padding: '0.5rem 1rem',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '0.9rem',
+              fontWeight: '500'
+            }}
+          >
+            + Добавить учителя
+          </button>
+        </div>
 
         {teachers.length === 0 ? (
           <div style={{
@@ -131,19 +156,82 @@ const TeacherSchedule: React.FC = () => {
             Нет данных об учителях
           </div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            {teachers.map(teacher => (
-              <div key={teacher.id} style={{ marginBottom: '1rem' }}>
-                <h4 style={{
-                  backgroundColor: '#e3f2fd',
-                  padding: '0.4rem 0.6rem',
-                  margin: '0 0 0.3rem 0',
-                  borderRadius: '4px',
+          <div>
+            {/* Teacher Navigation */}
+            {teachers.length > 1 && (
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: '1rem',
+                marginBottom: '1rem',
+                padding: '0.75rem',
+                backgroundColor: '#f8f9fa',
+                borderRadius: '8px'
+              }}>
+                <button
+                  onClick={() => setSelectedTeacherIndex(Math.max(0, selectedTeacherIndex - 1))}
+                  disabled={selectedTeacherIndex === 0}
+                  style={{
+                    backgroundColor: selectedTeacherIndex === 0 ? '#e0e0e0' : '#2196F3',
+                    color: 'white',
+                    border: 'none',
+                    padding: '0.5rem 1rem',
+                    borderRadius: '4px',
+                    cursor: selectedTeacherIndex === 0 ? 'not-allowed' : 'pointer',
+                    fontSize: '1.2rem',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  ←
+                </button>
+                <div style={{
+                  fontSize: '1rem',
+                  fontWeight: '600',
                   color: '#1976d2',
-                  fontSize: '0.9rem'
+                  minWidth: '250px',
+                  textAlign: 'center'
                 }}>
-                  👤 {teacher.fullName}
-                </h4>
+                  👤 {teachers[selectedTeacherIndex]?.fullName || ''}
+                  <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.25rem' }}>
+                    {selectedTeacherIndex + 1} из {teachers.length}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedTeacherIndex(Math.min(teachers.length - 1, selectedTeacherIndex + 1))}
+                  disabled={selectedTeacherIndex === teachers.length - 1}
+                  style={{
+                    backgroundColor: selectedTeacherIndex === teachers.length - 1 ? '#e0e0e0' : '#2196F3',
+                    color: 'white',
+                    border: 'none',
+                    padding: '0.5rem 1rem',
+                    borderRadius: '4px',
+                    cursor: selectedTeacherIndex === teachers.length - 1 ? 'not-allowed' : 'pointer',
+                    fontSize: '1.2rem',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  →
+                </button>
+              </div>
+            )}
+
+            {/* Schedule Table */}
+            <div style={{ overflowX: 'auto' }}>
+              {teachers[selectedTeacherIndex] && (
+                <div key={teachers[selectedTeacherIndex].id}>
+                  {teachers.length === 1 && (
+                    <h4 style={{
+                      backgroundColor: '#e3f2fd',
+                      padding: '0.4rem 0.6rem',
+                      margin: '0 0 0.3rem 0',
+                      borderRadius: '4px',
+                      color: '#1976d2',
+                      fontSize: '0.9rem'
+                    }}>
+                      👤 {teachers[selectedTeacherIndex].fullName}
+                    </h4>
+                  )}
                 <table style={{
                   width: '100%',
                   borderCollapse: 'collapse',
@@ -188,14 +276,14 @@ const TeacherSchedule: React.FC = () => {
                           {time}:00
                         </td>
                         {WEEKDAYS.map((day, dayIndex) => {
-                          const key = getCellKey(teacher.id, dayIndex, time);
-                          const cellValue = getCellValue(teacher.id, dayIndex, time);
+                          const key = getCellKey(teachers[selectedTeacherIndex].id, dayIndex, time);
+                          const cellValue = getCellValue(teachers[selectedTeacherIndex].id, dayIndex, time);
                           const isEditing = editingCell === key;
 
                           return (
                             <td
                               key={day}
-                              onClick={() => !isEditing && handleCellClick(teacher.id, dayIndex, time)}
+                              onClick={() => !isEditing && handleCellClick(teachers[selectedTeacherIndex].id, dayIndex, time)}
                               style={{
                                 border: '1px solid #ddd',
                                 padding: '0.2rem',
@@ -210,8 +298,8 @@ const TeacherSchedule: React.FC = () => {
                                   type="text"
                                   value={editValue}
                                   onChange={(e) => setEditValue(e.target.value)}
-                                  onBlur={() => handleCellSave(teacher.id, dayIndex, time)}
-                                  onKeyDown={(e) => handleKeyDown(e, teacher.id, dayIndex, time)}
+                                  onBlur={() => handleCellSave(teachers[selectedTeacherIndex].id, dayIndex, time)}
+                                  onKeyDown={(e) => handleKeyDown(e, teachers[selectedTeacherIndex].id, dayIndex, time)}
                                   autoFocus
                                   style={{
                                     width: '100%',
@@ -236,8 +324,9 @@ const TeacherSchedule: React.FC = () => {
                     ))}
                   </tbody>
                 </table>
-              </div>
-            ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -252,6 +341,16 @@ const TeacherSchedule: React.FC = () => {
           <strong>Примечание:</strong> Кликните на ячейку для редактирования. Enter - сохранить, Escape - отменить.
         </div>
       </div>
+
+      {showAddTeacher && (
+        <AddTeacherModal
+          onClose={() => setShowAddTeacher(false)}
+          onTeacherAdded={() => {
+            loadData();
+            setShowAddTeacher(false);
+          }}
+        />
+      )}
     </div>
   );
 };
