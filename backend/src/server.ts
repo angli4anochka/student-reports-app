@@ -13,6 +13,8 @@ import yearRoutes from './routes/years';
 import groupRoutes from './routes/groups';
 import exportRoutes from './routes/export';
 import importRoutes from './routes/import';
+import teacherRoutes from './routes/teachers';
+import adminRoutes from './routes/admin';
 
 dotenv.config();
 
@@ -21,7 +23,17 @@ const prisma = new PrismaClient();
 const PORT = process.env.PORT || 3001;
 
 app.use(helmet());
-app.use(cors());
+app.use(cors({
+  origin: [
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'https://student-reports-app.vercel.app',
+    'https://backend2-iota-sand.vercel.app'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(morgan('combined'));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true }));
@@ -34,6 +46,8 @@ app.use('/api/years', yearRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/export', exportRoutes);
 app.use('/api/import', importRoutes);
+app.use('/api/teachers', teacherRoutes);
+app.use('/api/admin', adminRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
