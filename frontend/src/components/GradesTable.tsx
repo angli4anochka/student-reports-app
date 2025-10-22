@@ -52,6 +52,7 @@ const GradesTable: React.FC = () => {
   );
   const [gradesData, setGradesData] = useState<GradeData>({});
   const [loading, setLoading] = useState(false);
+  const [loadingGrades, setLoadingGrades] = useState(false);
   const [showAddStudent, setShowAddStudent] = useState(false);
   const [showAddGroup, setShowAddGroup] = useState(false);
   const [editingGroupName, setEditingGroupName] = useState(false);
@@ -155,6 +156,8 @@ const GradesTable: React.FC = () => {
     }
 
     try {
+      setLoadingGrades(true);
+
       // Try to load grades from database
       const gradesFilters = {
         yearId: selectedYear,
@@ -164,30 +167,40 @@ const GradesTable: React.FC = () => {
       console.log('Loading grades with filters:', gradesFilters);
       const existingGrades = await api.getGrades(gradesFilters);
       console.log('Loaded existing grades from DB:', existingGrades.length, 'records');
+
       const gradesMap: GradeData = {};
-      
-      // Initialize all students with default values
+
+      // FIRST: Load existing grades from database into a temp map
+      const existingGradesMap = new Map<string, any>();
+      existingGrades.forEach((grade: any) => {
+        existingGradesMap.set(grade.studentId, grade);
+      });
+
+      // SECOND: Initialize students with data from DB or defaults
       studentsData.forEach((student: Student) => {
+        const existingGrade = existingGradesMap.get(student.id);
+
         gradesMap[student.id] = {
-          comment: ''
+          comment: existingGrade?.comment || ''
         };
+
+        // For each criterion, use DB value if exists, otherwise default to 1
         criteria.forEach((criterion) => {
-          gradesMap[student.id][criterion.id] = 1;
+          let gradeValue = 1; // default
+
+          if (existingGrade?.criteriaGrades) {
+            const criterionGrade = existingGrade.criteriaGrades.find(
+              (cg: any) => cg.criterionId === criterion.id
+            );
+            if (criterionGrade) {
+              gradeValue = criterionGrade.value;
+            }
+          }
+
+          gradesMap[student.id][criterion.id] = gradeValue;
         });
       });
-      
-      // Override with existing grades from database
-      existingGrades.forEach((grade: any) => {
-        if (gradesMap[grade.studentId]) {
-          gradesMap[grade.studentId].comment = grade.comment || '';
-          if (grade.criteriaGrades) {
-            grade.criteriaGrades.forEach((criterionGrade: any) => {
-              gradesMap[grade.studentId][criterionGrade.criterionId] = criterionGrade.value;
-            });
-          }
-        }
-      });
-      
+
       setGradesData(gradesMap);
     } catch (error) {
       console.error('Error loading grades:', error);
@@ -202,6 +215,8 @@ const GradesTable: React.FC = () => {
         });
       });
       setGradesData(initialGrades);
+    } finally {
+      setLoadingGrades(false);
     }
   };
 
@@ -661,52 +676,68 @@ const GradesTable: React.FC = () => {
         )}
 
         {/* Grades Table */}
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ 
-            width: '100%', 
-            borderCollapse: 'collapse',
-            fontSize: '0.95rem'
+        {loading || loadingGrades ? (
+          <div style={{
+            textAlign: 'center',
+            padding: '3rem',
+            backgroundColor: '#f9f9f9',
+            borderRadius: '4px',
+            marginTop: '1rem'
           }}>
-            <thead>
-              <tr>
-                <th style={{
-                  border: '1px solid #ddd',
-                  padding: '0.75rem',
-                  backgroundColor: '#e3f2fd',
-                  textAlign: 'left',
-                  minWidth: '200px',
-                  position: 'sticky',
-                  left: 0,
-                  zIndex: 5
-                }}>
-                  ФИО ученика
-                </th>
-                {criteria.map(criterion => (
-                  <th key={criterion.id} style={{
+            <div style={{ fontSize: '1.2rem', color: '#2196F3', marginBottom: '1rem' }}>
+              ⏳ Загрузка данных...
+            </div>
+            <div style={{ fontSize: '0.9rem', color: '#666' }}>
+              Пожалуйста, подождите
+            </div>
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{
+              width: '100%',
+              borderCollapse: 'collapse',
+              fontSize: '0.95rem'
+            }}>
+              <thead>
+                <tr>
+                  <th style={{
+                    border: '1px solid #ddd',
+                    padding: '0.75rem',
+                    backgroundColor: '#e3f2fd',
+                    textAlign: 'left',
+                    minWidth: '200px',
+                    position: 'sticky',
+                    left: 0,
+                    zIndex: 5
+                  }}>
+                    ФИО ученика
+                  </th>
+                  {criteria.map(criterion => (
+                    <th key={criterion.id} style={{
+                      border: '1px solid #ddd',
+                      padding: '0.75rem',
+                      backgroundColor: '#f8f9fa',
+                      textAlign: 'center',
+                      minWidth: '120px',
+                      fontSize: '0.9rem',
+                      fontWeight: 'bold'
+                    }}>
+                      {criterion.name}
+                    </th>
+                  ))}
+                  <th style={{
                     border: '1px solid #ddd',
                     padding: '0.75rem',
                     backgroundColor: '#f8f9fa',
                     textAlign: 'center',
-                    minWidth: '120px',
-                    fontSize: '0.9rem',
-                    fontWeight: 'bold'
+                    minWidth: '250px'
                   }}>
-                    {criterion.name}
+                    Комментарий
                   </th>
-                ))}
-                <th style={{
-                  border: '1px solid #ddd',
-                  padding: '0.75rem',
-                  backgroundColor: '#f8f9fa',
-                  textAlign: 'center',
-                  minWidth: '250px'
-                }}>
-                  Комментарий
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {students.map(student => (
+                </tr>
+              </thead>
+              <tbody>
+                {students.map(student => (
                 <tr key={student.id}>
                   <td style={{
                     border: '1px solid #ddd',
@@ -768,9 +799,10 @@ const GradesTable: React.FC = () => {
                   </td>
                 </tr>
               ))}
-            </tbody>
-          </table>
-        </div>
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {students.length === 0 && !loading && (
           <div style={{
