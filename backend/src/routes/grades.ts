@@ -125,19 +125,20 @@ router.get('/:id', async (req: AuthRequest, res) => {
 
 router.post('/', async (req: AuthRequest, res) => {
   try {
-    const { 
-      studentId, 
-      yearId, 
-      month, 
-      criteria, 
-      attendance, 
-      homework, 
+    const {
+      studentId,
+      yearId,
+      month,
+      criteria,
+      criteriaGrades, // Support both field names
+      attendance,
+      homework,
       comment,
-      recommendations 
+      recommendations
     } = req.body;
 
-    if (!studentId || !yearId || !month) {
-      return res.status(400).json({ error: 'Student ID, year ID, and month are required' });
+    if (!studentId || !month) {
+      return res.status(400).json({ error: 'Student ID and month are required' });
     }
 
     const student = await prisma.student.findFirst({
@@ -151,18 +152,20 @@ router.post('/', async (req: AuthRequest, res) => {
       return res.status(404).json({ error: 'Student not found' });
     }
 
-    const totalScore = criteria ? await calculateTotalScore(criteria) : 0;
+    // Support both 'criteria' and 'criteriaGrades' field names
+    const gradesData = criteriaGrades || criteria;
+    const totalScore = gradesData ? await calculateTotalScore(gradesData) : 0;
     const letterGrade = totalScore > 0 ? await getLetterGrade(totalScore) : null;
 
     const grade = await prisma.grade.upsert({
       where: {
-        studentId_yearId_month: {
+        studentId_month: {
           studentId,
-          yearId,
           month
         }
       },
       update: {
+        yearId,
         attendance: attendance || null,
         homework: homework || null,
         comment: comment || null,
@@ -186,13 +189,13 @@ router.post('/', async (req: AuthRequest, res) => {
       }
     });
 
-    if (criteria && criteria.length > 0) {
+    if (gradesData && gradesData.length > 0) {
       await prisma.criterionGrade.deleteMany({
         where: { gradeId: grade.id }
       });
 
       await prisma.criterionGrade.createMany({
-        data: criteria.map((c: any) => ({
+        data: gradesData.map((c: any) => ({
           gradeId: grade.id,
           criterionId: c.criterionId,
           value: c.value

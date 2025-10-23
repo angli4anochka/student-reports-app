@@ -76,8 +76,6 @@ model Year {
   createdBy String
   teacher   User   @relation(fields: [createdBy], references: [id], onDelete: Cascade)
 
-  grades Grade[]
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -105,7 +103,7 @@ model Criterion {
 model Grade {
   id            String @id @default(uuid())
   studentId     String
-  yearId        String
+  yearId        String?
   month         String
   attendance    Float? // Attendance percentage
   homework      String?
@@ -115,7 +113,6 @@ model Grade {
   grade         String? // Letter grade (A, B, C, etc.)
 
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  year    Year    @relation(fields: [yearId], references: [id], onDelete: Cascade)
 
   criteriaGrades CriterionGrade[]
   attachments    Attachment[]
@@ -123,7 +120,7 @@ model Grade {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([studentId, yearId, month])
+  @@unique([studentId, month])
   @@index([studentId])
   @@index([yearId])
   @@index([month])
