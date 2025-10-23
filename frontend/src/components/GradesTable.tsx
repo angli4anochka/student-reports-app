@@ -88,13 +88,6 @@ const GradesTable: React.FC = () => {
     }
   }, [selectedGroup, selectedMonth, selectedYear]);
 
-  // Reload grades when year or month changes
-  useEffect(() => {
-    if (selectedYear && selectedMonth && students.length > 0) {
-      loadGradesForStudents(students);
-    }
-  }, [selectedYear, selectedMonth, criteria, students.length]);
-
   // Сохранение выбранных значений в localStorage
   useEffect(() => {
     localStorage.setItem('gradesTable_selectedMonth', selectedMonth);
@@ -122,21 +115,23 @@ const GradesTable: React.FC = () => {
   const loadStudents = async () => {
     try {
       setLoading(true);
+      setLoadingGrades(true); // Set loading state before starting
       const filters: any = {};
       if (selectedGroup) {
         filters.groupId = selectedGroup;
       }
-      
+
       console.log('Loading students with filters:', filters);
       console.log('selectedGroup value:', selectedGroup);
-      
+
       const studentsData = await api.getStudents(filters);
       setStudents(studentsData);
-      
+
       // Load existing grades or initialize with defaults
       await loadGradesForStudents(studentsData);
     } catch (error) {
       console.error('Error loading students:', error);
+      setLoadingGrades(false);
     } finally {
       setLoading(false);
     }
@@ -147,12 +142,11 @@ const GradesTable: React.FC = () => {
 
     if (!selectedYear || !selectedMonth) {
       console.warn('Year or month not selected, skipping grades load');
+      setLoadingGrades(false);
       return;
     }
 
     try {
-      setLoadingGrades(true);
-
       // Try to load grades from database
       const gradesFilters = {
         yearId: selectedYear,
