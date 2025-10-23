@@ -17,9 +17,11 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  students Student[]
-  years    Year[]
-  groups   Group[]
+  students   Student[]
+  years      Year[]
+  groups     Group[]
+  attendance Attendance[]
+  lessons    Lesson[]
 
   @@index([email])
   @@index([role])
@@ -30,12 +32,15 @@ model Group {
   id          String @id @default(uuid())
   name        String
   description String?
-  
+
   teacherId String
   teacher   User   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  
-  students Student[]
-  
+
+  students              Student[]
+  attendance            Attendance[]
+  lessons               Lesson[]
+  scheduleSettings      GroupScheduleSettings?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -52,11 +57,12 @@ model Student {
 
   teacherId String
   teacher   User   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  
+
   groupId String?
   group   Group? @relation(fields: [groupId], references: [id], onDelete: SetNull)
 
-  grades Grade[]
+  grades     Grade[]
+  attendance Attendance[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -171,6 +177,64 @@ model GradeScale {
   updatedAt DateTime @updatedAt
 
   @@map("grade_scales")
+}
+
+model Attendance {
+  id        String @id @default(uuid())
+  studentId String
+  date      String // Date format: DD.MM.YYYY
+  status    String // PRESENT, ABSENT, LATE
+  teacherId String
+  groupId   String?
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacher User    @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  group   Group?  @relation(fields: [groupId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([studentId, date])
+  @@index([studentId])
+  @@index([date])
+  @@index([teacherId])
+  @@index([groupId])
+  @@map("attendance")
+}
+
+model Lesson {
+  id        String  @id @default(uuid())
+  date      String
+  topic     String
+  homework  String?
+  comment   String?
+  teacherId String
+  groupId   String?
+
+  teacher User   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  group   Group? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([teacherId])
+  @@index([groupId])
+  @@index([date])
+  @@map("lessons")
+}
+
+model GroupScheduleSettings {
+  id       String @id @default(uuid())
+  groupId  String @unique
+  weekdays String // Comma-separated weekday numbers (0-6)
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([groupId])
+  @@map("group_schedule_settings")
 }
 
 enum Role {
