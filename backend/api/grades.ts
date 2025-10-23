@@ -67,13 +67,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
 
       if (criteriaGrades && Array.isArray(criteriaGrades)) {
-        for (const cg of criteriaGrades) {
-          await prisma.criterionGrade.upsert({
-            where: { gradeId_criterionId: { gradeId: grade.id, criterionId: cg.criterionId } },
-            update: { value: cg.value },
-            create: { gradeId: grade.id, criterionId: cg.criterionId, value: cg.value }
-          });
-        }
+        // Delete old grades and create new ones
+        await prisma.criterionGrade.deleteMany({
+          where: { gradeId: grade.id }
+        });
+
+        await prisma.criterionGrade.createMany({
+          data: criteriaGrades.map((cg: any) => ({
+            gradeId: grade.id,
+            criterionId: cg.criterionId,
+            value: cg.value
+          }))
+        });
       }
 
       const updatedGrade = await prisma.grade.findUnique({
@@ -108,13 +113,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
 
       if (criteriaGrades && Array.isArray(criteriaGrades)) {
-        for (const cg of criteriaGrades) {
-          await prisma.criterionGrade.upsert({
-            where: { gradeId_criterionId: { gradeId: grade.id, criterionId: cg.criterionId } },
-            update: { value: cg.value },
-            create: { gradeId: grade.id, criterionId: cg.criterionId, value: cg.value }
-          });
-        }
+        // Delete old grades and create new ones
+        await prisma.criterionGrade.deleteMany({
+          where: { gradeId: grade.id }
+        });
+
+        await prisma.criterionGrade.createMany({
+          data: criteriaGrades.map((cg: any) => ({
+            gradeId: grade.id,
+            criterionId: cg.criterionId,
+            value: cg.value
+          }))
+        });
       }
 
       const updatedGrade = await prisma.grade.findUnique({

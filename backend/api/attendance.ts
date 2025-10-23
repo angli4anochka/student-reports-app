@@ -47,14 +47,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Get attendance records with filters
       const { studentId, groupId, dateFrom, dateTo } = req.query;
 
-      let whereClause = `WHERE teacher_id = '${userId}'`;
+      let whereClause = `WHERE "teacherId" = '${userId}'`;
 
       if (studentId) {
-        whereClause += ` AND student_id = '${studentId}'`;
+        whereClause += ` AND "studentId" = '${studentId}'`;
       }
 
       if (groupId) {
-        whereClause += ` AND group_id = '${groupId}'`;
+        whereClause += ` AND "groupId" = '${groupId}'`;
       }
 
       if (dateFrom) {
@@ -68,13 +68,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const attendance = await prisma.$queryRaw`
         SELECT
           id,
-          student_id as "studentId",
+          "studentId",
           date,
           status,
-          teacher_id as "teacherId",
-          group_id as "groupId",
-          created_at as "createdAt",
-          updated_at as "updatedAt"
+          "teacherId",
+          "groupId",
+          "createdAt",
+          "updatedAt"
         FROM attendance
         ${prisma.$queryRawUnsafe(whereClause)}
         ORDER BY date DESC
@@ -94,7 +94,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Check if record exists
       const existing = await prisma.$queryRaw`
         SELECT id FROM attendance
-        WHERE student_id = ${studentId} AND date = ${date}
+        WHERE "studentId" = ${studentId} AND date = ${date}
       ` as any[];
 
       if (existing.length > 0) {
@@ -102,46 +102,46 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await prisma.$executeRaw`
           UPDATE attendance
           SET status = ${status},
-              group_id = ${groupId || null},
-              teacher_id = ${userId},
-              updated_at = NOW()
-          WHERE student_id = ${studentId} AND date = ${date}
+              "groupId" = ${groupId || null},
+              "teacherId" = ${userId},
+              "updatedAt" = NOW()
+          WHERE "studentId" = ${studentId} AND date = ${date}
         `;
 
         const updated = await prisma.$queryRaw`
           SELECT
             id,
-            student_id as "studentId",
+            "studentId",
             date,
             status,
-            teacher_id as "teacherId",
-            group_id as "groupId",
-            created_at as "createdAt",
-            updated_at as "updatedAt"
+            "teacherId",
+            "groupId",
+            "createdAt",
+            "updatedAt"
           FROM attendance
-          WHERE student_id = ${studentId} AND date = ${date}
+          WHERE "studentId" = ${studentId} AND date = ${date}
         ` as any[];
 
         return res.status(200).json(updated[0]);
       } else {
-        // Create new record - generate random ID like other endpoints
+        // Create new record - generate UUID
         const id = Math.random().toString(36).substr(2, 9);
 
         await prisma.$executeRaw`
-          INSERT INTO attendance (id, student_id, date, status, teacher_id, group_id, created_at, updated_at)
+          INSERT INTO attendance (id, "studentId", date, status, "teacherId", "groupId", "createdAt", "updatedAt")
           VALUES (${id}, ${studentId}, ${date}, ${status}, ${userId}, ${groupId || null}, NOW(), NOW())
         `;
 
         const created = await prisma.$queryRaw`
           SELECT
             id,
-            student_id as "studentId",
+            "studentId",
             date,
             status,
-            teacher_id as "teacherId",
-            group_id as "groupId",
-            created_at as "createdAt",
-            updated_at as "updatedAt"
+            "teacherId",
+            "groupId",
+            "createdAt",
+            "updatedAt"
           FROM attendance
           WHERE id = ${id}
         ` as any[];
@@ -159,7 +159,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       await prisma.$executeRaw`
         DELETE FROM attendance
-        WHERE student_id = ${studentId} AND date = ${date} AND teacher_id = ${userId}
+        WHERE "studentId" = ${studentId} AND date = ${date} AND "teacherId" = ${userId}
       `;
 
       return res.status(200).json({ message: 'Attendance record deleted' });

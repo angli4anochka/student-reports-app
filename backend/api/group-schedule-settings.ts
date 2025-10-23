@@ -54,12 +54,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const settings = await prisma.$queryRaw`
         SELECT
           id,
-          group_id as "groupId",
+          "groupId",
           weekdays,
           "createdAt",
           "updatedAt"
         FROM group_schedule_settings
-        WHERE group_id = ${groupId}
+        WHERE "groupId" = ${groupId}
       ` as any[];
 
       if (settings.length === 0) {
@@ -80,7 +80,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Check if settings exist
       const existing = await prisma.$queryRaw`
         SELECT id FROM group_schedule_settings
-        WHERE group_id = ${groupId}
+        WHERE "groupId" = ${groupId}
       ` as any[];
 
       if (existing.length > 0) {
@@ -89,18 +89,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           UPDATE group_schedule_settings
           SET weekdays = ${weekdays},
               "updatedAt" = NOW()
-          WHERE group_id = ${groupId}
+          WHERE "groupId" = ${groupId}
         `;
 
         const updated = await prisma.$queryRaw`
           SELECT
             id,
-            group_id as "groupId",
+            "groupId",
             weekdays,
             "createdAt",
             "updatedAt"
           FROM group_schedule_settings
-          WHERE group_id = ${groupId}
+          WHERE "groupId" = ${groupId}
         ` as any[];
 
         return res.status(200).json(updated[0]);
@@ -109,14 +109,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const id = Math.random().toString(36).substr(2, 9);
 
         await prisma.$executeRaw`
-          INSERT INTO group_schedule_settings (id, group_id, weekdays, "createdAt", "updatedAt")
+          INSERT INTO group_schedule_settings (id, "groupId", weekdays, "createdAt", "updatedAt")
           VALUES (${id}, ${groupId}, ${weekdays}, NOW(), NOW())
         `;
 
         const created = await prisma.$queryRaw`
           SELECT
             id,
-            group_id as "groupId",
+            "groupId",
             weekdays,
             "createdAt",
             "updatedAt"
