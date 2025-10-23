@@ -44,110 +44,65 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     if (req.method === 'GET') {
-      // Get attendance records with filters
+      // Get attendance records with filters using Prisma
       const { studentId, groupId, dateFrom, dateTo } = req.query;
 
-      let whereClause = `WHERE "teacherId" = '${userId}'`;
+      const where: any = {
+        teacherId: userId
+      };
 
       if (studentId) {
-        whereClause += ` AND "studentId" = '${studentId}'`;
+        where.studentId = studentId as string;
       }
 
       if (groupId) {
-        whereClause += ` AND "groupId" = '${groupId}'`;
+        where.groupId = groupId as string;
       }
 
-      if (dateFrom) {
-        whereClause += ` AND date >= '${dateFrom}'`;
+      if (dateFrom || dateTo) {
+        where.date = {};
+        if (dateFrom) where.date.gte = dateFrom as string;
+        if (dateTo) where.date.lte = dateTo as string;
       }
 
-      if (dateTo) {
-        whereClause += ` AND date <= '${dateTo}'`;
-      }
-
-      const attendance = await prisma.$queryRaw`
-        SELECT
-          id,
-          "studentId",
-          date,
-          status,
-          "teacherId",
-          "groupId",
-          "createdAt",
-          "updatedAt"
-        FROM attendance
-        ${prisma.$queryRawUnsafe(whereClause)}
-        ORDER BY date DESC
-      `;
+      const attendance = await prisma.attendance.findMany({
+        where,
+        orderBy: { date: 'desc' }
+      });
 
       return res.status(200).json(attendance);
     }
 
     if (req.method === 'POST') {
-      // Create or update attendance record
+      // Create or update attendance record using Prisma
       const { studentId, date, status, groupId } = req.body;
 
       if (!studentId || !date || !status) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
 
-      // Check if record exists
-      const existing = await prisma.$queryRaw`
-        SELECT id FROM attendance
-        WHERE "studentId" = ${studentId} AND date = ${date}
-      ` as any[];
+      const attendance = await prisma.attendance.upsert({
+        where: {
+          studentId_date: {
+            studentId,
+            date
+          }
+        },
+        update: {
+          status,
+          groupId: groupId || null,
+          teacherId: userId
+        },
+        create: {
+          studentId,
+          date,
+          status,
+          teacherId: userId,
+          groupId: groupId || null
+        }
+      });
 
-      if (existing.length > 0) {
-        // Update existing record
-        await prisma.$executeRaw`
-          UPDATE attendance
-          SET status = ${status},
-              "groupId" = ${groupId || null},
-              "teacherId" = ${userId},
-              "updatedAt" = NOW()
-          WHERE "studentId" = ${studentId} AND date = ${date}
-        `;
-
-        const updated = await prisma.$queryRaw`
-          SELECT
-            id,
-            "studentId",
-            date,
-            status,
-            "teacherId",
-            "groupId",
-            "createdAt",
-            "updatedAt"
-          FROM attendance
-          WHERE "studentId" = ${studentId} AND date = ${date}
-        ` as any[];
-
-        return res.status(200).json(updated[0]);
-      } else {
-        // Create new record - generate UUID
-        const id = Math.random().toString(36).substr(2, 9);
-
-        await prisma.$executeRaw`
-          INSERT INTO attendance (id, "studentId", date, status, "teacherId", "groupId", "createdAt", "updatedAt")
-          VALUES (${id}, ${studentId}, ${date}, ${status}, ${userId}, ${groupId || null}, NOW(), NOW())
-        `;
-
-        const created = await prisma.$queryRaw`
-          SELECT
-            id,
-            "studentId",
-            date,
-            status,
-            "teacherId",
-            "groupId",
-            "createdAt",
-            "updatedAt"
-          FROM attendance
-          WHERE id = ${id}
-        ` as any[];
-
-        return res.status(201).json(created[0]);
-      }
+      return res.status(200).json(attendance);
     }
 
     if (req.method === 'DELETE') {
@@ -157,10 +112,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ error: 'Missing studentId or date' });
       }
 
-      await prisma.$executeRaw`
-        DELETE FROM attendance
-        WHERE "studentId" = ${studentId} AND date = ${date} AND "teacherId" = ${userId}
-      `;
+      await prisma.attendance.deleteMany({
+        where: {
+          studentId: studentId as string,
+          date: date as string,
+          teacherId: userId
+        }
+      });
 
       return res.status(200).json({ message: 'Attendance record deleted' });
     }
@@ -168,6 +126,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   } catch (error) {
     console.error('Attendance API error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({
+      error: 'Internal server error',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 }

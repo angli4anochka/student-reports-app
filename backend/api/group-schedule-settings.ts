@@ -50,24 +50,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ error: 'groupId is required' });
       }
 
-      // Get schedule settings for group
-      const settings = await prisma.$queryRaw`
-        SELECT
-          id,
-          "groupId",
-          weekdays,
-          "createdAt",
-          "updatedAt"
-        FROM group_schedule_settings
-        WHERE "groupId" = ${groupId}
-      ` as any[];
+      // Get schedule settings for group using Prisma
+      const settings = await prisma.groupScheduleSettings.findUnique({
+        where: { groupId: groupId as string }
+      });
 
-      if (settings.length === 0) {
+      if (!settings) {
         // Return default: Tuesday and Thursday
         return res.status(200).json({ groupId, weekdays: '2,4' });
       }
 
-      return res.status(200).json(settings[0]);
+      return res.status(200).json(settings);
     }
 
     if (req.method === 'POST') {
@@ -77,60 +70,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
 
-      // Check if settings exist
-      const existing = await prisma.$queryRaw`
-        SELECT id FROM group_schedule_settings
-        WHERE "groupId" = ${groupId}
-      ` as any[];
+      // Upsert settings using Prisma
+      const settings = await prisma.groupScheduleSettings.upsert({
+        where: { groupId },
+        update: { weekdays },
+        create: { groupId, weekdays }
+      });
 
-      if (existing.length > 0) {
-        // Update existing
-        await prisma.$executeRaw`
-          UPDATE group_schedule_settings
-          SET weekdays = ${weekdays},
-              "updatedAt" = NOW()
-          WHERE "groupId" = ${groupId}
-        `;
-
-        const updated = await prisma.$queryRaw`
-          SELECT
-            id,
-            "groupId",
-            weekdays,
-            "createdAt",
-            "updatedAt"
-          FROM group_schedule_settings
-          WHERE "groupId" = ${groupId}
-        ` as any[];
-
-        return res.status(200).json(updated[0]);
-      } else {
-        // Create new
-        const id = Math.random().toString(36).substr(2, 9);
-
-        await prisma.$executeRaw`
-          INSERT INTO group_schedule_settings (id, "groupId", weekdays, "createdAt", "updatedAt")
-          VALUES (${id}, ${groupId}, ${weekdays}, NOW(), NOW())
-        `;
-
-        const created = await prisma.$queryRaw`
-          SELECT
-            id,
-            "groupId",
-            weekdays,
-            "createdAt",
-            "updatedAt"
-          FROM group_schedule_settings
-          WHERE id = ${id}
-        ` as any[];
-
-        return res.status(201).json(created[0]);
-      }
+      return res.status(200).json(settings);
     }
 
     return res.status(405).json({ error: 'Method not allowed' });
   } catch (error) {
     console.error('Group schedule settings API error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({
+      error: 'Internal server error',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 }
