@@ -42,10 +42,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         where,
         include: {
           student: true,
-          year: true,
           criteriaGrades: { include: { criterion: true } }
         },
-        orderBy: [{ year: { year: 'desc' } }, { month: 'asc' }]
+        orderBy: [{ month: 'asc' }]
       });
       return res.json(grades);
     }
@@ -53,17 +52,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // POST /grades - create grade
     if (!id && req.method === 'POST') {
       const { studentId, yearId, month, attendance, homework, comment, recommendations, criteriaGrades } = req.body;
-      if (!studentId || !yearId || !month) {
-        return res.status(400).json({ error: 'Student ID, year ID, and month are required' });
+      if (!studentId || !month) {
+        return res.status(400).json({ error: 'Student ID and month are required' });
       }
 
       const grade = await prisma.grade.upsert({
-        where: { studentId_yearId_month: { studentId, yearId, month } },
-        update: { attendance, homework, comment, recommendations },
+        where: { studentId_month: { studentId, month } },
+        update: { yearId, attendance, homework, comment, recommendations },
         create: { studentId, yearId, month, attendance, homework, comment, recommendations },
         include: {
           student: true,
-          year: true,
           criteriaGrades: { include: { criterion: true } }
         }
       });
@@ -82,7 +80,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         where: { id: grade.id },
         include: {
           student: true,
-          year: true,
           criteriaGrades: { include: { criterion: true } }
         }
       });
@@ -96,7 +93,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         where: { id },
         include: {
           student: true,
-          year: true,
           criteriaGrades: { include: { criterion: true } }
         }
       });
@@ -125,7 +121,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         where: { id: grade.id },
         include: {
           student: true,
-          year: true,
           criteriaGrades: { include: { criterion: true } }
         }
       });
