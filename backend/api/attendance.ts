@@ -59,16 +59,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         where.groupId = groupId as string;
       }
 
-      if (dateFrom || dateTo) {
-        where.date = {};
-        if (dateFrom) where.date.gte = dateFrom as string;
-        if (dateTo) where.date.lte = dateTo as string;
-      }
-
-      const attendance = await prisma.attendance.findMany({
+      // Get all records and filter dates on client side
+      // (Date format DD.MM.YYYY doesn't support SQL string comparison)
+      let attendance = await prisma.attendance.findMany({
         where,
         orderBy: { date: 'desc' }
       });
+
+      // Filter by date range if provided (client-side filtering)
+      if (dateFrom || dateTo) {
+        attendance = attendance.filter((record: any) => {
+          if (dateFrom && record.date < dateFrom) return false;
+          if (dateTo && record.date > dateTo) return false;
+          return true;
+        });
+      }
 
       return res.status(200).json(attendance);
     }
