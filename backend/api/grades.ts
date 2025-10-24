@@ -52,6 +52,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // POST /grades - create grade
     if (!id && req.method === 'POST') {
       const { studentId, yearId, month, attendance, homework, comment, recommendations, criteriaGrades } = req.body;
+
+      console.log('POST /grades received:', { studentId, yearId, month, criteriaGradesCount: criteriaGrades?.length });
+
       if (!studentId || !month) {
         return res.status(400).json({ error: 'Student ID and month are required' });
       }
@@ -66,7 +69,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       });
 
-      if (criteriaGrades && Array.isArray(criteriaGrades)) {
+      console.log('Grade upserted, ID:', grade.id);
+
+      if (criteriaGrades && Array.isArray(criteriaGrades) && criteriaGrades.length > 0) {
+        console.log('Saving criteriaGrades:', criteriaGrades);
+
         // Delete old grades and create new ones
         await prisma.criterionGrade.deleteMany({
           where: { gradeId: grade.id }
@@ -79,6 +86,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             value: cg.value
           }))
         });
+
+        console.log('CriteriaGrades saved successfully');
+      } else {
+        console.warn('No criteriaGrades to save!', { criteriaGrades });
       }
 
       const updatedGrade = await prisma.grade.findUnique({
