@@ -157,6 +157,16 @@ const GradesTable: React.FC = () => {
       const existingGrades = await api.getGrades(gradesFilters);
       console.log('Loaded existing grades from DB:', existingGrades.length, 'records');
 
+      // Debug: log first grade if exists
+      if (existingGrades.length > 0) {
+        console.log('Sample grade from DB:', {
+          studentId: existingGrades[0].studentId,
+          month: existingGrades[0].month,
+          criteriaGradesCount: existingGrades[0].criteriaGrades?.length,
+          criteriaGrades: existingGrades[0].criteriaGrades
+        });
+      }
+
       const gradesMap: GradeData = {};
 
       // FIRST: Load existing grades from database into a temp map
@@ -177,13 +187,18 @@ const GradesTable: React.FC = () => {
         criteria.forEach((criterion) => {
           let gradeValue = 1; // default
 
-          if (existingGrade?.criteriaGrades) {
+          if (existingGrade?.criteriaGrades && existingGrade.criteriaGrades.length > 0) {
             const criterionGrade = existingGrade.criteriaGrades.find(
               (cg: any) => cg.criterionId === criterion.id
             );
             if (criterionGrade) {
               gradeValue = criterionGrade.value;
+              console.log(`Loaded grade for student ${student.id}, criterion ${criterion.id}: ${gradeValue}`);
+            } else {
+              console.warn(`No grade found for student ${student.id}, criterion ${criterion.id}, using default: 1`);
             }
+          } else {
+            console.warn(`No criteriaGrades for student ${student.id}, using defaults`);
           }
 
           gradesMap[student.id][criterion.id] = gradeValue;
