@@ -76,7 +76,6 @@ router.get('/', async (req: AuthRequest, res) => {
       where,
       include: {
         student: true,
-        year: true,
         criteriaGrades: {
           include: {
             criterion: true
@@ -102,7 +101,6 @@ router.get('/:id', async (req: AuthRequest, res) => {
       where: { id },
       include: {
         student: true,
-        year: true,
         criteriaGrades: {
           include: {
             criterion: true
@@ -207,7 +205,6 @@ router.post('/', async (req: AuthRequest, res) => {
       where: { id: grade.id },
       include: {
         student: true,
-        year: true,
         criteriaGrades: {
           include: {
             criterion: true

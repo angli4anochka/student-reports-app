@@ -53,7 +53,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!id && req.method === 'POST') {
       const { studentId, yearId, month, attendance, homework, comment, recommendations, criteriaGrades } = req.body;
 
-      console.log('POST /grades received:', { studentId, yearId, month, criteriaGradesCount: criteriaGrades?.length });
+      console.log('POST /grades received - FULL BODY:', JSON.stringify(req.body, null, 2));
+      console.log('POST /grades received:', { studentId, yearId, month, criteriaGradesCount: criteriaGrades?.length, criteriaGrades });
 
       if (!studentId || !month) {
         return res.status(400).json({ error: 'Student ID and month are required' });

@@ -171,6 +171,8 @@ class ApiService {
   }
 
   async saveGrade(data: any) {
+    console.log('[API] Sending grade data:', JSON.stringify(data, null, 2));
+    console.log('[API] criteriaGrades array:', data.criteriaGrades);
     return this.request<any>('/grades', {
       method: 'POST',
       body: JSON.stringify(data),
