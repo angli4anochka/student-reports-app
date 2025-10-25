@@ -73,20 +73,25 @@ const GradesTable: React.FC = () => {
   const saveTimerRef = React.useRef<{ [key: string]: NodeJS.Timeout }>({});
 
   useEffect(() => {
-    console.log('Component mounted, loading initial data...');
+    console.log('🔥🔥🔥 NEW VERSION LOADED - Component mounted, loading initial data...');
     loadInitialData();
   }, []);
 
   useEffect(() => {
-    // Загружать студентов только когда выбраны месяц и группа
-    if (selectedMonth && selectedGroup) {
+    // Загружать студентов только когда выбраны месяц, группа И загружены критерии
+    if (selectedMonth && selectedGroup && criteria.length > 0) {
+      console.log('[EFFECT] Loading students because criteria are ready:', criteria.length);
       loadStudents();
     } else {
       // Очищаем список студентов если условия не выполнены
-      setStudents([]);
-      setGradesData({});
+      if (!selectedMonth || !selectedGroup) {
+        setStudents([]);
+        setGradesData({});
+      } else if (criteria.length === 0) {
+        console.log('[EFFECT] Waiting for criteria to load...');
+      }
     }
-  }, [selectedGroup, selectedMonth, selectedYear]);
+  }, [selectedGroup, selectedMonth, selectedYear, criteria]);
 
   // Сохранение выбранных значений в localStorage
   useEffect(() => {
@@ -156,6 +161,7 @@ const GradesTable: React.FC = () => {
       console.log('Loading grades with filters:', gradesFilters);
       const existingGrades = await api.getGrades(gradesFilters);
       console.log('Loaded existing grades from DB:', existingGrades.length, 'records');
+      console.log('[DEBUG] ALL grades from DB:', existingGrades);
 
       // Debug: log first grade if exists
       if (existingGrades.length > 0) {
@@ -165,6 +171,8 @@ const GradesTable: React.FC = () => {
           criteriaGradesCount: existingGrades[0].criteriaGrades?.length,
           criteriaGrades: existingGrades[0].criteriaGrades
         });
+      } else {
+        console.warn('[DEBUG] No grades found in DB for filters:', gradesFilters);
       }
 
       const gradesMap: GradeData = {};
@@ -178,6 +186,7 @@ const GradesTable: React.FC = () => {
       // SECOND: Initialize students with data from DB or defaults
       studentsData.forEach((student: Student) => {
         const existingGrade = existingGradesMap.get(student.id);
+        console.log(`[DEBUG] Processing student ${student.fullName} (${student.id}):`, existingGrade ? 'FOUND in DB' : 'NOT FOUND in DB');
 
         gradesMap[student.id] = {
           comment: existingGrade?.comment || ''
@@ -188,17 +197,24 @@ const GradesTable: React.FC = () => {
           let gradeValue = 1; // default
 
           if (existingGrade?.criteriaGrades && existingGrade.criteriaGrades.length > 0) {
+            // DEBUG: Log criteriaGrades structure
+            if (student.id === existingGrade.studentId) {
+              console.log(`[DEBUG] Student ${student.fullName} - criteriaGrades:`, existingGrade.criteriaGrades);
+              console.log(`[DEBUG] Looking for criterion.id:`, criterion.id);
+              console.log(`[DEBUG] criteriaGrades IDs:`, existingGrade.criteriaGrades.map((cg: any) => cg.criterionId));
+            }
+
             const criterionGrade = existingGrade.criteriaGrades.find(
               (cg: any) => cg.criterionId === criterion.id
             );
             if (criterionGrade) {
               gradeValue = criterionGrade.value;
-              console.log(`Loaded grade for student ${student.id}, criterion ${criterion.id}: ${gradeValue}`);
+              console.log(`✅ Loaded grade for student ${student.fullName}, criterion ${criterion.name}: ${gradeValue}`);
             } else {
-              console.warn(`No grade found for student ${student.id}, criterion ${criterion.id}, using default: 1`);
+              console.warn(`❌ No grade found for student ${student.fullName}, criterion ${criterion.name} (${criterion.id}), using default: 1`);
             }
           } else {
-            console.warn(`No criteriaGrades for student ${student.id}, using defaults`);
+            console.warn(`No criteriaGrades for student ${student.fullName}, using defaults`);
           }
 
           gradesMap[student.id][criterion.id] = gradeValue;
