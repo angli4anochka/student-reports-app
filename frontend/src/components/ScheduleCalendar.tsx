@@ -22,8 +22,12 @@ interface Attendance {
 const ScheduleCalendar: React.FC = () => {
   const [groups, setGroups] = useState<Group[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
-  const [selectedGroup, setSelectedGroup] = useState<string>('');
-  const [selectedMonth, setSelectedMonth] = useState<string>('');
+  const [selectedGroup, setSelectedGroup] = useState<string>(() => {
+    return localStorage.getItem('scheduleCalendar_selectedGroup') || '';
+  });
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => {
+    return localStorage.getItem('scheduleCalendar_selectedMonth') || '';
+  });
   const [selectedYear] = useState<number>(2025);
   const [weekDays, setWeekDays] = useState<number[]>([2, 4]); // Вт=2, Чт=4
   const [lessonDates, setLessonDates] = useState<string[]>([]);
@@ -49,15 +53,19 @@ const ScheduleCalendar: React.FC = () => {
     loadGroups();
   }, []);
 
+  // Сохранение выбранной группы в localStorage
   useEffect(() => {
     if (selectedGroup) {
+      localStorage.setItem('scheduleCalendar_selectedGroup', selectedGroup);
       loadStudents();
       loadGroupScheduleSettings();
     }
   }, [selectedGroup]);
 
+  // Сохранение выбранного месяца в localStorage
   useEffect(() => {
     if (selectedMonth) {
+      localStorage.setItem('scheduleCalendar_selectedMonth', selectedMonth);
       calculateLessonDates();
       // Reload attendance data when month changes
       if (students.length > 0) {
