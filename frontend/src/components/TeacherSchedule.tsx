@@ -40,33 +40,39 @@ const TeacherSchedule: React.FC = () => {
     try {
       setLoading(true);
 
-      // Load teachers
-      const teachersData = await api.getTeachers();
-      setTeachers(teachersData);
+      // Load teachers and groups in parallel
+      const [teachersData, groupsData] = await Promise.all([
+        api.getTeachers(),
+        api.getGroups()
+      ]);
 
-      // Load groups
-      const groupsData = await api.getGroups();
+      setTeachers(teachersData);
       setGroups(groupsData);
 
-      // Load schedules from API for all teachers
+      // Load schedules from API for all teachers in parallel
       const scheduleData: { [key: string]: ScheduleCell } = {};
 
-      for (const teacher of teachersData) {
-        try {
-          const teacherSchedules = await api.getTeacherSchedules(teacher.id);
-          teacherSchedules.forEach((schedule: any) => {
-            const key = getCellKey(schedule.teacherId, schedule.day, schedule.time);
-            scheduleData[key] = {
-              teacherId: schedule.teacherId,
-              day: schedule.day,
-              time: schedule.time,
-              groupName: schedule.groupName
-            };
-          });
-        } catch (error) {
-          console.error(`Error loading schedule for teacher ${teacher.id}:`, error);
-        }
-      }
+      // Create array of promises for all teachers
+      const schedulePromises = teachersData.map(teacher =>
+        api.getTeacherSchedules(teacher.id)
+          .then(teacherSchedules => {
+            teacherSchedules.forEach((schedule: any) => {
+              const key = getCellKey(schedule.teacherId, schedule.day, schedule.time);
+              scheduleData[key] = {
+                teacherId: schedule.teacherId,
+                day: schedule.day,
+                time: schedule.time,
+                groupName: schedule.groupName
+              };
+            });
+          })
+          .catch(error => {
+            console.error(`Error loading schedule for teacher ${teacher.id}:`, error);
+          })
+      );
+
+      // Wait for all schedule requests to complete
+      await Promise.all(schedulePromises);
 
       setSchedule(scheduleData);
     } catch (error) {
