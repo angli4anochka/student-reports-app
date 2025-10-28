@@ -51,24 +51,26 @@ const LessonsSchedule: React.FC = () => {
   }, [lessons, selectedGroup, selectedMonth]);
 
   const filterLessons = () => {
+    // Show nothing if either group or month is not selected
+    if (!selectedGroup || !selectedMonth) {
+      setFilteredLessons([]);
+      return;
+    }
+
     let filtered = lessons;
 
     // Filter by group
-    if (selectedGroup) {
-      filtered = filtered.filter(lesson => lesson.groupId === selectedGroup);
-    }
+    filtered = filtered.filter(lesson => lesson.groupId === selectedGroup);
 
     // Filter by month
-    if (selectedMonth) {
-      const monthIndex = MONTHS.indexOf(selectedMonth);
-      if (monthIndex !== -1) {
-        const monthNumber = String(monthIndex + 1).padStart(2, '0');
-        filtered = filtered.filter(lesson => {
-          // Date format is DD.MM, so we check if it ends with .MM
-          const lessonMonth = lesson.date.split('.')[1];
-          return lessonMonth === monthNumber;
-        });
-      }
+    const monthIndex = MONTHS.indexOf(selectedMonth);
+    if (monthIndex !== -1) {
+      const monthNumber = String(monthIndex + 1).padStart(2, '0');
+      filtered = filtered.filter(lesson => {
+        // Date format is DD.MM, so we check if it ends with .MM
+        const lessonMonth = lesson.date.split('.')[1];
+        return lessonMonth === monthNumber;
+      });
     }
 
     setFilteredLessons(filtered);
@@ -373,7 +375,9 @@ const LessonsSchedule: React.FC = () => {
             {filteredLessons.length === 0 ? (
               <tr>
                 <td colSpan={6} style={{ padding: '2rem', textAlign: 'center', color: '#999' }}>
-                  {lessons.length === 0 ? 'Нет уроков. Добавьте первый урок!' : 'Нет уроков по выбранным фильтрам.'}
+                  {!selectedGroup || !selectedMonth
+                    ? 'Выберите группу и месяц для отображения уроков'
+                    : 'Нет уроков по выбранным фильтрам.'}
                 </td>
               </tr>
             ) : (
