@@ -21,8 +21,10 @@ interface Lesson {
 
 const LessonsSchedule: React.FC = () => {
   const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [filteredLessons, setFilteredLessons] = useState<Lesson[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<string>('');
+  const [selectedMonth, setSelectedMonth] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -34,14 +36,43 @@ const LessonsSchedule: React.FC = () => {
     groupId: ''
   });
 
+  const MONTHS = [
+    'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+    'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+  ];
+
   useEffect(() => {
     loadGroups();
     loadLessons();
   }, []);
 
   useEffect(() => {
-    loadLessons();
-  }, [selectedGroup]);
+    filterLessons();
+  }, [lessons, selectedGroup, selectedMonth]);
+
+  const filterLessons = () => {
+    let filtered = lessons;
+
+    // Filter by group
+    if (selectedGroup) {
+      filtered = filtered.filter(lesson => lesson.groupId === selectedGroup);
+    }
+
+    // Filter by month
+    if (selectedMonth) {
+      const monthIndex = MONTHS.indexOf(selectedMonth);
+      if (monthIndex !== -1) {
+        const monthNumber = String(monthIndex + 1).padStart(2, '0');
+        filtered = filtered.filter(lesson => {
+          // Date format is DD.MM, so we check if it ends with .MM
+          const lessonMonth = lesson.date.split('.')[1];
+          return lessonMonth === monthNumber;
+        });
+      }
+    }
+
+    setFilteredLessons(filtered);
+  };
 
   const loadGroups = async () => {
     try {
@@ -55,11 +86,8 @@ const LessonsSchedule: React.FC = () => {
   const loadLessons = async () => {
     try {
       setLoading(true);
-      const filters: any = {};
-      if (selectedGroup) {
-        filters.groupId = selectedGroup;
-      }
-      const lessonsData = await api.getLessons(filters);
+      // Load all lessons without filters
+      const lessonsData = await api.getLessons({});
       setLessons(lessonsData);
     } catch (error) {
       console.error('Error loading lessons:', error);
@@ -138,24 +166,49 @@ const LessonsSchedule: React.FC = () => {
         </button>
       </div>
 
-      {/* Filter */}
-      <div style={{ marginBottom: '1.5rem' }}>
-        <label style={{ display: 'block', marginBottom: '0.5rem' }}>Группа:</label>
-        <select
-          value={selectedGroup}
-          onChange={(e) => setSelectedGroup(e.target.value)}
-          style={{
-            padding: '0.5rem',
-            border: '1px solid #ddd',
-            borderRadius: '4px',
-            minWidth: '200px'
-          }}
-        >
-          <option value="">Все группы</option>
-          {groups.map(group => (
-            <option key={group.id} value={group.id}>{group.name}</option>
-          ))}
-        </select>
+      {/* Filters */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gap: '1rem',
+        marginBottom: '1.5rem'
+      }}>
+        <div>
+          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Группа:</label>
+          <select
+            value={selectedGroup}
+            onChange={(e) => setSelectedGroup(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '0.5rem',
+              border: '1px solid #ddd',
+              borderRadius: '4px'
+            }}
+          >
+            <option value="">Все группы</option>
+            {groups.map(group => (
+              <option key={group.id} value={group.id}>{group.name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Месяц:</label>
+          <select
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '0.5rem',
+              border: '1px solid #ddd',
+              borderRadius: '4px'
+            }}
+          >
+            <option value="">Все месяцы</option>
+            {MONTHS.map(month => (
+              <option key={month} value={month}>{month}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Add/Edit Form */}
@@ -172,10 +225,24 @@ const LessonsSchedule: React.FC = () => {
               <div>
                 <label style={{ display: 'block', marginBottom: '0.5rem' }}>Дата:</label>
                 <input
-                  type="text"
-                  placeholder="08.09"
-                  value={formData.date}
-                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                  type="date"
+                  value={formData.date ? (() => {
+                    // Convert DD.MM to YYYY-MM-DD for date input
+                    const [day, month] = formData.date.split('.');
+                    if (day && month) {
+                      return `2025-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                    }
+                    return '';
+                  })() : ''}
+                  onChange={(e) => {
+                    // Convert YYYY-MM-DD to DD.MM
+                    if (e.target.value) {
+                      const [year, month, day] = e.target.value.split('-');
+                      setFormData({ ...formData, date: `${day}.${month}` });
+                    } else {
+                      setFormData({ ...formData, date: '' });
+                    }
+                  }}
                   required
                   style={{
                     width: '100%',
@@ -303,14 +370,14 @@ const LessonsSchedule: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            {lessons.length === 0 ? (
+            {filteredLessons.length === 0 ? (
               <tr>
                 <td colSpan={6} style={{ padding: '2rem', textAlign: 'center', color: '#999' }}>
-                  Нет уроков. Добавьте первый урок!
+                  {lessons.length === 0 ? 'Нет уроков. Добавьте первый урок!' : 'Нет уроков по выбранным фильтрам.'}
                 </td>
               </tr>
             ) : (
-              lessons.map((lesson) => (
+              filteredLessons.map((lesson) => (
                 <tr key={lesson.id} style={{ borderBottom: '1px solid #ddd' }}>
                   <td style={{ padding: '0.75rem', border: '1px solid #ddd' }}>{lesson.date}</td>
                   <td style={{ padding: '0.75rem', border: '1px solid #ddd' }}>
