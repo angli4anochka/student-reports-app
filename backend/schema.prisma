@@ -17,11 +17,12 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  students   Student[]
-  years      Year[]
-  groups     Group[]
-  attendance Attendance[]
-  lessons    Lesson[]
+  students         Student[]
+  years            Year[]
+  groups           Group[]
+  attendance       Attendance[]
+  lessons          Lesson[]
+  teacherSchedules TeacherSchedule[]
 
   @@index([email])
   @@index([role])
@@ -235,6 +236,23 @@ model GroupScheduleSettings {
 
   @@index([groupId])
   @@map("group_schedule_settings")
+}
+
+model TeacherSchedule {
+  id        String @id @default(uuid())
+  teacherId String
+  day       Int // 0-4 for Mon-Fri
+  time      String // Time slot like "11", "12", etc.
+  groupName String // Name of the group/class
+
+  teacher User @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([teacherId, day, time])
+  @@index([teacherId])
+  @@map("teacher_schedules")
 }
 
 enum Role {

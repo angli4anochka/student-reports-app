@@ -18,6 +18,7 @@ import adminRoutes from './routes/admin';
 import attendanceRoutes from './routes/attendance';
 import lessonsRoutes from './routes/lessons';
 import groupScheduleSettingsRoutes from './routes/groupScheduleSettings';
+import teacherSchedulesRoutes from './routes/teacherSchedules';
 
 dotenv.config();
 
@@ -54,6 +55,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/lessons', lessonsRoutes);
 app.use('/api/group-schedule-settings', groupScheduleSettingsRoutes);
+app.use('/api/teacher-schedules', teacherSchedulesRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });

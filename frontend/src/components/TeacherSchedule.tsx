@@ -48,11 +48,27 @@ const TeacherSchedule: React.FC = () => {
       const groupsData = await api.getGroups();
       setGroups(groupsData);
 
-      // Load schedule from localStorage
-      const savedSchedule = localStorage.getItem('teacher_schedule');
-      if (savedSchedule) {
-        setSchedule(JSON.parse(savedSchedule));
+      // Load schedules from API for all teachers
+      const scheduleData: { [key: string]: ScheduleCell } = {};
+
+      for (const teacher of teachersData) {
+        try {
+          const teacherSchedules = await api.getTeacherSchedules(teacher.id);
+          teacherSchedules.forEach((schedule: any) => {
+            const key = getCellKey(schedule.teacherId, schedule.day, schedule.time);
+            scheduleData[key] = {
+              teacherId: schedule.teacherId,
+              day: schedule.day,
+              time: schedule.time,
+              groupName: schedule.groupName
+            };
+          });
+        } catch (error) {
+          console.error(`Error loading schedule for teacher ${teacher.id}:`, error);
+        }
       }
+
+      setSchedule(scheduleData);
     } catch (error) {
       console.error('Error loading schedule data:', error);
     } finally {
@@ -75,25 +91,45 @@ const TeacherSchedule: React.FC = () => {
     setEditValue(getCellValue(teacherId, day, time));
   };
 
-  const handleCellSave = (teacherId: string, day: number, time: string) => {
+  const handleCellSave = async (teacherId: string, day: number, time: string) => {
     const key = getCellKey(teacherId, day, time);
     const newSchedule = { ...schedule };
 
-    if (editValue.trim()) {
-      newSchedule[key] = {
-        teacherId,
-        day,
-        time,
-        groupName: editValue.trim()
-      };
-    } else {
-      delete newSchedule[key];
-    }
+    try {
+      if (editValue.trim()) {
+        // Save to API
+        await api.saveTeacherSchedule({
+          teacherId,
+          day,
+          time,
+          groupName: editValue.trim()
+        });
 
-    setSchedule(newSchedule);
-    localStorage.setItem('teacher_schedule', JSON.stringify(newSchedule));
-    setEditingCell(null);
-    setEditValue('');
+        newSchedule[key] = {
+          teacherId,
+          day,
+          time,
+          groupName: editValue.trim()
+        };
+      } else {
+        // Delete from API
+        await api.saveTeacherSchedule({
+          teacherId,
+          day,
+          time,
+          groupName: ''
+        });
+
+        delete newSchedule[key];
+      }
+
+      setSchedule(newSchedule);
+      setEditingCell(null);
+      setEditValue('');
+    } catch (error) {
+      console.error('Error saving schedule:', error);
+      alert('Ошибка при сохранении расписания');
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent, teacherId: string, day: number, time: string) => {

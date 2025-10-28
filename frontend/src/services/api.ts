@@ -276,6 +276,24 @@ class ApiService {
       body: JSON.stringify(data),
     });
   }
+
+  // Teacher schedules endpoints
+  async getTeacherSchedules(teacherId: string) {
+    return this.request<any[]>(`/teacher-schedules?teacherId=${teacherId}`);
+  }
+
+  async saveTeacherSchedule(data: { teacherId: string; day: number; time: string; groupName: string }) {
+    return this.request<any>('/teacher-schedules', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteTeacherSchedule(teacherId: string, day: number, time: string) {
+    return this.request(`/teacher-schedules?teacherId=${teacherId}&day=${day}&time=${time}`, {
+      method: 'DELETE'
+    });
+  }
 }
 
 export const api = new ApiService();

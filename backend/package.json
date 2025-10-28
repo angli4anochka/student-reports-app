@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "stпart": "node dist/server.js",
-    "start:prod": "NODE_ENV=production node dist/server.js",
+    "start": "node server.js",
+    "start:prod": "NODE_ENV=production node server.js",
     "dev": "nodemon src/server.ts",
     "build": "npx prisma generate && echo 'Build completed'",
     "build:js": "echo 'No build needed for Vercel serverless'",
