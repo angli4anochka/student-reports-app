@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
+import { exportAllDataToExcel } from '../services/exportToExcel';
 
 interface Group {
   id: string;
@@ -43,6 +44,7 @@ const Dashboard: React.FC = () => {
     (localStorage.getItem('dashboard_activeTab') as 'students' | 'grades' | 'schedule' | 'attendance' | 'admin') || 'students'
   );
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -103,6 +105,19 @@ const Dashboard: React.FC = () => {
     setCollapsedGroups(newCollapsed);
   };
 
+  const handleExportToExcel = async () => {
+    try {
+      setIsExporting(true);
+      await exportAllDataToExcel();
+      alert('✅ Данные успешно экспортированы в Excel!');
+    } catch (error) {
+      console.error('Export error:', error);
+      alert('❌ Ошибка при экспорте данных. Попробуйте снова.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: '2rem' }}>
@@ -125,22 +140,39 @@ const Dashboard: React.FC = () => {
 
   return (
     <div>
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
-        marginBottom: '2rem' 
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '2rem'
       }}>
         <h2 style={{ margin: 0 }}>Система оценок учеников</h2>
         <div style={{ display: 'flex', gap: '1rem' }}>
+          <button
+            onClick={handleExportToExcel}
+            disabled={isExporting}
+            style={{
+              backgroundColor: isExporting ? '#9E9E9E' : '#2196F3',
+              color: 'white',
+              border: 'none',
+              padding: '0.5rem 1rem',
+              borderRadius: '4px',
+              cursor: isExporting ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem'
+            }}
+          >
+            {isExporting ? '⏳ Экспорт...' : '📊 Экспорт в Excel'}
+          </button>
           {activeTab === 'students' && (
             <button
               onClick={() => setShowStudentForm(true)}
-              style={{ 
-                backgroundColor: '#4CAF50', 
-                color: 'white', 
-                border: 'none', 
-                padding: '0.5rem 1rem', 
+              style={{
+                backgroundColor: '#4CAF50',
+                color: 'white',
+                border: 'none',
+                padding: '0.5rem 1rem',
                 borderRadius: '4px',
                 cursor: 'pointer'
               }}
