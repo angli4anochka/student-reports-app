@@ -1,12 +1,9 @@
 name: Deploy
 
-# Деплой монорепо tutorsdesk (backend Node + frontend Vite) через self-hosted runner на VM.
-# На push в main: checkout -> rsync в боевую папку -> backend (prisma generate + pm2 restart) + frontend (vite build).
-#
-# >>> TODO подтвердить на VM в сессии: <<<
-#   - APP_DIR (реальный путь боевой папки на сервере)
-#   - имя PM2-процесса бэкенда (по памяти: student-reports-api, порт 3001)
-#   - куда build фронтенда (dist/) отдаёт nginx — путь не трогаем, vite перезаписывает dist на месте
+# Деплой монорепо tutorsdesk (backend Node/ts-node + frontend Vite) через self-hosted runner на VM.
+# На push в main: checkout -> rsync кода в боевую папку -> backend (prisma generate + pm2 restart)
+#                 -> frontend (vite build -> копия dist в nginx-root /var/www/html).
+# Данные на сервере НЕ трогаются: нет --delete, БД/uploads/.env исключены, миграций БД нет.
 
 on:
   push:
@@ -23,12 +20,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Sync to live dir, build & restart
+      - name: Sync, build & restart
         run: |
           set -euo pipefail
-          APP_DIR="/home/ubuntu/student-reports-app"   # TODO confirm on VM
+          APP_DIR="/home/ubuntu/student-reports-app"   # бэкенд: pm2 student-reports-api (:3001)
+          WEB_ROOT="/var/www/html"                     # nginx-root домена tutorsdesk.ru (SPA)
 
-          # Синхронизация без --delete. Исключаем серверные данные/секреты/сборки.
+          # Синхронизация кода. БЕЗ --delete. Исключаем серверные данные/секреты/сборки.
           rsync -a \
             --exclude '.git' \
             --exclude '.github' \
@@ -41,15 +39,16 @@ jobs:
             --exclude '*.db' --exclude '*.sqlite' \
             ./ "$APP_DIR/"
 
-          # --- Backend (PM2: student-reports-api, :3001) ---
+          # --- Backend (ts-node через pm2) ---
           cd "$APP_DIR/backend"
           npm install
-          npx prisma generate
-          pm2 restart student-reports-api --update-env   # TODO confirm process name
+          npx prisma generate          # генерация клиента; схему/данные НЕ меняет
+          pm2 restart student-reports-api --update-env
 
-          # --- Frontend (Vite -> dist/, отдаётся nginx) ---
+          # --- Frontend (Vite -> dist -> nginx root) ---
           cd "$APP_DIR/frontend"
           npm install
-          npx vite build
+          npm run build                # = npx vite build -> создаёт dist/
+          cp -r dist/. "$WEB_ROOT/"    # копируем содержимое (без удаления чужих файлов)
 
           echo "✅ student-reports-app deployed -> https://tutorsdesk.ru"
