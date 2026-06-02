@@ -1,0 +1,675 @@
+import express from 'express';
+import { PrismaClient } from '@prisma/client';
+import { authenticateToken, AuthRequest } from '../middleware/auth';
+// import { checkSubscriptionLimit } from './subscriptions'; // Временно отключено
+
+const router = express.Router();
+const prisma = new PrismaClient();
+
+router.use(authenticateToken);
+
+// Get available teachers for admin (Veronika and Valeria only)
+router.get('/available-teachers', async (req: AuthRequest, res) => {
+  try {
+    const userId = req.user!.userId;
+
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true }
+    });
+
+    if (!currentUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Только Admin может получить список учителей
+    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'ORG_ADMIN') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const teachers = await prisma.user.findMany({
+      where: {
+        email: { in: ['Kljvveronika@rambler.ru', 'lera.dagldiyan@mail.ru'] }
+      },
+      select: {
+        id: true,
+        fullName: true,
+        email: true
+      },
+      orderBy: { fullName: 'asc' }
+    });
+
+    res.json(teachers);
+  } catch (error) {
+    console.error('Error fetching available teachers:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get all groups for the authenticated teacher (owned + shared + organization)
+router.get('/', async (req: AuthRequest, res) => {
+  try {
+    const userId = req.user!.userId;
+
+    // Получаем данные пользователя для проверки организации
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { organizationId: true, role: true }
+    });
+
+    if (!currentUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    let where: any = {};
+
+    // Изоляция по организациям + логика для администраторов
+    if (currentUser.organizationId) {
+      if (currentUser.role === 'ADMIN' || currentUser.role === 'SCHOOL_MANAGER') {
+        // Администраторы/менеджеры видят ТОЛЬКО группы с общими студентами
+        // НЕ видят личные группы учителей (где все студенты с isPersonal: true)
+        where = {
+          organizationId: currentUser.organizationId,
+          students: {
+            some: { isPersonal: false } // хотя бы один общий студент в группе
+          }
+        };
+      } else {
+        // Обычные учителя в организации - видят свои + расшаренные с ними
+        // И только в рамках своей организации
+        where.AND = [
+          { organizationId: currentUser.organizationId },
+          {
+            OR: [
+              { teacherId: userId },
+              { collaborators: { some: { teacherId: userId } } }
+            ]
+          }
+        ];
+      }
+    } else {
+      // Индивидуальный репетитор - видит только свои группы + расшаренные
+      where.OR = [
+        { teacherId: userId },
+        { collaborators: { some: { teacherId: userId } } }
+      ];
+    }
+
+    const groups = await prisma.group.findMany({
+      where,
+      include: {
+        _count: {
+          select: { students: true }
+        },
+        teacher: {
+          select: { id: true, fullName: true, email: true }
+        },
+        collaborators: {
+          include: {
+            teacher: {
+              select: { id: true, fullName: true, email: true }
+            }
+          }
+        }
+      },
+      orderBy: { name: 'asc' }
+    });
+
+    // Mark ownership and shared status
+    // Для администраторов: isShared всегда false (они видят как менеджеры)
+    // Для учителей: isShared = true если не владелец
+    const isAdmin = currentUser.role === 'ADMIN' || currentUser.role === 'SCHOOL_MANAGER';
+    const allGroups = groups.map(g => ({
+      ...g,
+      isOwner: g.teacherId === userId,
+      isShared: isAdmin ? false : (g.teacherId !== userId)
+    }));
+
+    res.json(allGroups);
+  } catch (error) {
+    console.error('Error fetching groups:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get a specific group
+router.get('/:id', async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user!.userId;
+
+    // Получаем данные пользователя для проверки организации
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { organizationId: true, role: true }
+    });
+
+    if (!currentUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const group = await prisma.group.findUnique({
+      where: { id },
+      include: {
+        students: true,
+        teacher: {
+          select: { id: true, fullName: true, email: true }
+        },
+        collaborators: {
+          include: {
+            teacher: {
+              select: { id: true, fullName: true, email: true }
+            }
+          }
+        }
+      }
+    });
+
+    if (!group) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+
+    // Check access
+    const isOwner = group.teacherId === userId;
+    const isCollaborator = group.collaborators.some(c => c.teacherId === userId);
+    const isAdmin = (currentUser.role === 'ADMIN' || currentUser.role === 'SCHOOL_MANAGER') &&
+                    group.organizationId === currentUser.organizationId;
+    const hasSharedStudents = group.students.some(s => !s.isPersonal);
+
+    // Администраторы видят ТОЛЬКО группы с общими студентами
+    // Учителя видят свои + расшаренные с ними
+    if (!isOwner && !isCollaborator && !(isAdmin && hasSharedStudents)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    res.json({ ...group, isOwner, isShared: !isOwner });
+  } catch (error) {
+    console.error('Error fetching group:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Create a new group
+router.post('/', async (req: AuthRequest, res) => { // checkSubscriptionLimit временно отключен
+  try {
+    const { name, description, teacherId: requestedTeacherId } = req.body;
+    const userId = req.user!.userId;
+
+    if (!name) {
+      return res.status(400).json({ error: 'Group name is required' });
+    }
+
+    // Get current user's organization and role
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { organizationId: true, role: true }
+    });
+
+    if (!currentUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    let finalTeacherId = userId;
+
+    // ADMIN должен передать teacherId - выбрать учителя
+    if (currentUser.role === 'ADMIN' || currentUser.role === 'ORG_ADMIN') {
+      if (!requestedTeacherId) {
+        return res.status(400).json({ error: 'Admin must specify teacherId' });
+      }
+
+      // Проверяем, что учитель из списка разрешённых
+      const targetTeachers = await prisma.user.findMany({
+        where: {
+          email: { in: ['Kljvveronika@rambler.ru', 'lera.dagldiyan@mail.ru'] }
+        },
+        select: { id: true }
+      });
+
+      const teacherIds = targetTeachers.map(t => t.id);
+      if (!teacherIds.includes(requestedTeacherId)) {
+        return res.status(403).json({ error: 'Admin can only create groups for Veronika or Valeria' });
+      }
+
+      finalTeacherId = requestedTeacherId;
+    }
+
+    // Check if group with this name already exists for this teacher
+    const existingGroup = await prisma.group.findFirst({
+      where: {
+        name,
+        teacherId: finalTeacherId
+      }
+    });
+
+    if (existingGroup) {
+      return res.status(409).json({ error: 'Group with this name already exists' });
+    }
+
+    const group = await prisma.group.create({
+      data: {
+        name,
+        description: description || null,
+        teacherId: finalTeacherId,
+        organizationId: currentUser?.organizationId // Set organizationId from user
+      },
+      include: {
+        _count: {
+          select: { students: true }
+        }
+      }
+    });
+
+    res.status(201).json(group);
+  } catch (error) {
+    console.error('Error creating group:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Update a group
+router.put('/:id', async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description } = req.body;
+    const userId = req.user!.userId;
+
+    // Получаем данные пользователя для проверки организации
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { organizationId: true, role: true }
+    });
+
+    if (!currentUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Можно редактировать только свои группы (не shared)
+    const existingGroup = await prisma.group.findFirst({
+      where: { id, teacherId: userId }
+    });
+
+    if (!existingGroup) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+
+    // If name is being changed, check for duplicates
+    if (name && name !== existingGroup.name) {
+      const nameExists = await prisma.group.findFirst({
+        where: {
+          name,
+          teacherId: existingGroup.teacherId,
+          id: { not: id }
+        }
+      });
+
+      if (nameExists) {
+        return res.status(409).json({ error: 'Group with this name already exists' });
+      }
+    }
+
+    const group = await prisma.group.update({
+      where: { id },
+      data: {
+        name: name || existingGroup.name,
+        description: description !== undefined ? description : existingGroup.description
+      },
+      include: {
+        _count: {
+          select: { students: true }
+        }
+      }
+    });
+
+    res.json(group);
+  } catch (error) {
+    console.error('Error updating group:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PATCH endpoint to reassign group to another teacher
+router.patch('/:id/teacher', async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const { teacherId: newTeacherId } = req.body;
+    const userId = req.user!.userId;
+
+    if (!newTeacherId) {
+      return res.status(400).json({ error: 'teacherId is required' });
+    }
+
+    // Получаем роль пользователя
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true, organizationId: true }
+    });
+
+    if (!currentUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Only ADMIN can reassign groups
+    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'ORG_ADMIN') {
+      return res.status(403).json({ error: 'Only admins can reassign groups' });
+    }
+
+    // Verify new teacher exists and is from allowed list
+    const targetTeachers = await prisma.user.findMany({
+      where: {
+        email: { in: ['Kljvveronika@rambler.ru', 'lera.dagldiyan@mail.ru'] }
+      },
+      select: { id: true }
+    });
+
+    const teacherIds = targetTeachers.map(t => t.id);
+    if (!teacherIds.includes(newTeacherId)) {
+      return res.status(403).json({ error: 'Can only reassign to Veronika or Valeria' });
+    }
+
+    // Find and update the group
+    const group = await prisma.group.findUnique({
+      where: { id }
+    });
+
+    if (!group) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+
+    // Check that group belongs to managed teachers
+    if (!teacherIds.includes(group.teacherId)) {
+      return res.status(403).json({ error: 'Can only manage groups of Veronika or Valeria' });
+    }
+
+    // Update group's teacherId
+    const updatedGroup = await prisma.group.update({
+      where: { id },
+      data: { teacherId: newTeacherId },
+      include: {
+        _count: {
+          select: { students: true }
+        },
+        teacher: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    res.json(updatedGroup);
+  } catch (error) {
+    console.error('Error reassigning group:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Delete a group
+router.delete('/:id', async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user!.userId;
+
+    // Get current user's role
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true }
+    });
+
+    if (!currentUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Build where clause based on role
+    let whereClause: any = { id };
+
+    // If ADMIN, allow deletion of groups belonging to managed teachers
+    if (currentUser.role === 'ADMIN' || currentUser.role === 'ORG_ADMIN') {
+      // Get list of managed teachers
+      const targetTeachers = await prisma.user.findMany({
+        where: {
+          email: { in: ['Kljvveronika@rambler.ru', 'lera.dagldiyan@mail.ru'] }
+        },
+        select: { id: true }
+      });
+      const teacherIds = targetTeachers.map(t => t.id);
+
+      // Admin can delete groups belonging to managed teachers
+      whereClause.teacherId = { in: teacherIds };
+    } else {
+      // Regular teachers can only delete their own groups
+      whereClause.teacherId = userId;
+    }
+
+    const existingGroup = await prisma.group.findFirst({
+      where: whereClause,
+      include: {
+        students: true
+      }
+    });
+
+    if (!existingGroup) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+
+    // Get all student IDs in this group
+    const studentIds = existingGroup.students.map(s => s.id);
+
+    // Delete everything in a transaction
+    await prisma.$transaction(async (tx) => {
+      // 1. Delete completed lessons for students in this group
+      if (studentIds.length > 0) {
+        await tx.completedLesson.deleteMany({
+          where: {
+            OR: [
+              { studentId: { in: studentIds } },
+              { customStudentId: { in: studentIds } },
+              { groupId: id },
+              { customGroupId: id }
+            ]
+          }
+        });
+
+        // 2. Delete personal schedule slots for students in this group
+        await tx.personalScheduleSlot.deleteMany({
+          where: {
+            OR: [
+              { studentId: { in: studentIds } },
+              { groupId: id }
+            ]
+          }
+        });
+
+        // 3. Delete lesson types for students in this group
+        await tx.lessonType.deleteMany({
+          where: {
+            studentId: { in: studentIds }
+          }
+        });
+
+        // 4. Delete students in this group
+        await tx.student.deleteMany({
+          where: { id: { in: studentIds } }
+        });
+      }
+
+      // 5. Delete the group itself
+      await tx.group.delete({
+        where: { id }
+      });
+    });
+
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting group:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Add a collaborator to a group
+router.post('/:id/collaborators', async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const { teacherId } = req.body;
+    const userId = req.user!.userId;
+
+    if (!teacherId) {
+      return res.status(400).json({ error: 'Teacher ID is required' });
+    }
+
+    // Check if group exists and user is the owner
+    const group = await prisma.group.findFirst({
+      where: {
+        id,
+        teacherId: userId
+      }
+    });
+
+    if (!group) {
+      return res.status(404).json({ error: 'Group not found or you are not the owner' });
+    }
+
+    // Check if teacher exists
+    const teacher = await prisma.user.findUnique({
+      where: { id: teacherId },
+      select: { id: true, fullName: true, email: true, role: true, organizationId: true }
+    });
+
+    if (!teacher) {
+      return res.status(404).json({ error: 'Teacher not found' });
+    }
+
+    if (teacher.role !== 'TEACHER' && teacher.role !== 'SCHOOL_MANAGER') {
+      return res.status(400).json({ error: 'Can only add teachers as collaborators' });
+    }
+
+    // Проверяем, что учитель в той же организации (если есть)
+    if (group.organizationId && teacher.organizationId !== group.organizationId) {
+      return res.status(403).json({ error: 'Teacher must be in the same organization' });
+    }
+
+    // Check if already a collaborator
+    const existing = await prisma.groupTeacher.findUnique({
+      where: {
+        groupId_teacherId: {
+          groupId: id,
+          teacherId: teacherId
+        }
+      }
+    });
+
+    if (existing) {
+      return res.status(409).json({ error: 'Teacher is already a collaborator' });
+    }
+
+    // Add collaborator
+    const collaboration = await prisma.groupTeacher.create({
+      data: {
+        groupId: id,
+        teacherId: teacherId
+      },
+      include: {
+        teacher: {
+          select: { id: true, fullName: true, email: true }
+        }
+      }
+    });
+
+    res.status(201).json(collaboration);
+  } catch (error) {
+    console.error('Error adding collaborator:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Remove a collaborator from a group
+router.delete('/:id/collaborators/:teacherId', async (req: AuthRequest, res) => {
+  try {
+    const { id, teacherId } = req.params;
+    const userId = req.user!.userId;
+
+    // Check if group exists and user is the owner
+    const group = await prisma.group.findFirst({
+      where: {
+        id,
+        teacherId: userId
+      }
+    });
+
+    if (!group) {
+      return res.status(404).json({ error: 'Group not found or you are not the owner' });
+    }
+
+    // Remove collaborator
+    await prisma.groupTeacher.deleteMany({
+      where: {
+        groupId: id,
+        teacherId: teacherId
+      }
+    });
+
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error removing collaborator:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get all collaborators for a group
+router.get('/:id/collaborators', async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user!.userId;
+
+    // Получаем данные пользователя для проверки организации
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { organizationId: true, role: true }
+    });
+
+    if (!currentUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const group = await prisma.group.findUnique({
+      where: { id },
+      include: {
+        collaborators: {
+          include: {
+            teacher: {
+              select: { id: true, fullName: true, email: true }
+            }
+          }
+        },
+        students: {
+          select: { isPersonal: true }
+        }
+      }
+    });
+
+    if (!group) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+
+    // Check access
+    const isOwner = group.teacherId === userId;
+    const isCollaborator = group.collaborators.some(c => c.teacherId === userId);
+    const isAdmin = (currentUser.role === 'ADMIN' || currentUser.role === 'SCHOOL_MANAGER') &&
+                    group.organizationId === currentUser.organizationId;
+    const hasSharedStudents = group.students.some(s => !s.isPersonal);
+
+    // Администраторы видят коллабораторов ТОЛЬКО групп с общими студентами
+    // Учителя видят коллабораторов своих групп + расшаренных с ними
+    if (!isOwner && !isCollaborator && !(isAdmin && hasSharedStudents)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    res.json(group.collaborators);
+  } catch (error) {
+    console.error('Error fetching collaborators:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+export default router;

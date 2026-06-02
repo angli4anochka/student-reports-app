@@ -1,0 +1,49 @@
+{
+  "version": 2,
+  "installCommand": "rm -rf node_modules/.prisma && npm install && npx prisma generate",
+  "buildCommand": "npx prisma generate && npm run build",
+  "functions": {
+    "api/**/*.ts": {
+      "memory": 1024,
+      "maxDuration": 10
+    }
+  },
+  "rewrites": [
+    { "source": "/api/groups/:id", "destination": "/api/groups?id=:id" },
+    { "source": "/api/groups/:id/:action", "destination": "/api/groups?id=:id&action=:action" },
+    { "source": "/api/students/:id", "destination": "/api/students?id=:id" },
+    { "source": "/api/students/:id/:action", "destination": "/api/students?id=:id&action=:action" },
+    { "source": "/api/grades/:id", "destination": "/api/grades?id=:id" },
+    { "source": "/api/criteria/:id", "destination": "/api/criteria?id=:id" },
+    { "source": "/api/lessons/:id", "destination": "/api/lessons?id=:id" },
+    { "source": "/api/admin/:action", "destination": "/api/admin?action=:action" },
+    { "source": "/api/auth/:action", "destination": "/api/auth?action=:action" }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Credentials",
+          "value": "true"
+        },
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization"
+        },
+        {
+          "key": "Access-Control-Max-Age",
+          "value": "86400"
+        }
+      ]
+    }
+  ]
+}

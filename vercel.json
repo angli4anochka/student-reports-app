@@ -1,0 +1,9 @@
+{
+  "buildCommand": "cd backend && npx prisma generate && cd ../frontend && npm run build",
+  "build": {
+    "env": {
+      "PRISMA_SKIP_POSTINSTALL_GENERATE": "false"
+    }
+  },
+  "installCommand": "npm install --prefix frontend && npm install --prefix backend && cd backend && npx prisma generate"
+}

@@ -1,0 +1,868 @@
+import { VercelRequest, VercelResponse } from '@vercel/node';
+import { PrismaClient } from '@prisma/client';
+import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
+
+const prisma = new PrismaClient();
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+
+interface JWTPayload {
+  userId: string;
+  email: string;
+}
+
+const verifyToken = (token: string): JWTPayload => {
+  return jwt.verify(token, JWT_SECRET) as JWTPayload;
+};
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // CORS headers
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
+
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+
+  // Verify authentication
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const token = authHeader.substring(7);
+  let userId: string;
+
+  try {
+    const payload = verifyToken(token);
+    userId = payload.userId;
+  } catch (error) {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+
+  try {
+    const { entity } = req.query;
+    console.log('Teacher earnings API - entity:', entity, 'method:', req.method, 'userId:', userId);
+
+    // Route to different handlers based on entity type
+    if (entity === 'lessonTypes') {
+      return await handleLessonTypes(req, res, userId);
+    } else if (entity === 'schedule') {
+      return await handleSchedule(req, res, userId);
+    } else if (entity === 'completed') {
+      return await handleCompleted(req, res, userId);
+    } else if (entity === 'weekEarnings') {
+      return await handleWeekEarnings(req, res, userId);
+    } else {
+      return res.status(400).json({ error: 'Invalid entity type' });
+    }
+  } catch (error) {
+    console.error('Teacher earnings API error:', error);
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack');
+    return res.status(500).json({
+      error: 'Internal server error',
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.stack : undefined) : undefined
+    });
+  }
+}
+
+// Handler for Lesson Types (CRUD) - using raw SQL
+async function handleLessonTypes(req: VercelRequest, res: VercelResponse, userId: string) {
+  try {
+    const { id } = req.query;
+
+    if (req.method === 'GET') {
+      if (id) {
+        const lessonType = await prisma.$queryRaw<any[]>`
+          SELECT * FROM lesson_types WHERE id = ${id as string}
+        `;
+        if (lessonType.length === 0 || lessonType[0].teacherId !== userId) {
+          return res.status(404).json({ error: 'Lesson type not found' });
+        }
+        return res.json(lessonType[0]);
+      } else {
+        console.log('Getting lesson types for userId:', userId);
+        const lessonTypes = await prisma.$queryRaw<any[]>`
+          SELECT * FROM lesson_types
+          WHERE "teacherId" = ${userId}
+          ORDER BY "createdAt" ASC
+        `;
+        console.log('Found lesson types:', lessonTypes.length);
+        return res.json(lessonTypes);
+      }
+    }
+
+  if (req.method === 'POST') {
+    const { name, color, pricePerHour } = req.body;
+    if (!name || !color || pricePerHour === undefined) {
+      return res.status(400).json({ error: 'Name, color, and pricePerHour are required' });
+    }
+
+    const lessonTypeId = crypto.randomUUID();
+    await prisma.$executeRaw`
+      INSERT INTO lesson_types (id, name, color, "pricePerHour", "teacherId", "createdAt", "updatedAt")
+      VALUES (${lessonTypeId}, ${name}, ${color}, ${parseFloat(pricePerHour)}, ${userId}, NOW(), NOW())
+    `;
+
+    const lessonType = await prisma.$queryRaw<any[]>`
+      SELECT * FROM lesson_types WHERE id = ${lessonTypeId}
+    `;
+
+    return res.status(201).json(lessonType[0]);
+  }
+
+  if (req.method === 'PUT') {
+    if (!id) {
+      return res.status(400).json({ error: 'Lesson type ID required' });
+    }
+
+    const { name, color, pricePerHour } = req.body;
+
+    // Check ownership
+    const existing = await prisma.$queryRaw<any[]>`
+      SELECT * FROM lesson_types WHERE id = ${id as string}
+    `;
+    if (existing.length === 0 || existing[0].teacherId !== userId) {
+      return res.status(404).json({ error: 'Lesson type not found' });
+    }
+
+    await prisma.$executeRaw`
+      UPDATE lesson_types
+      SET
+        name = COALESCE(${name}, name),
+        color = COALESCE(${color}, color),
+        "pricePerHour" = COALESCE(${pricePerHour ? parseFloat(pricePerHour) : null}, "pricePerHour"),
+        "updatedAt" = NOW()
+      WHERE id = ${id as string}
+    `;
+
+    const lessonType = await prisma.$queryRaw<any[]>`
+      SELECT * FROM lesson_types WHERE id = ${id as string}
+    `;
+
+    return res.json(lessonType[0]);
+  }
+
+  if (req.method === 'DELETE') {
+    if (!id) {
+      return res.status(400).json({ error: 'Lesson type ID required' });
+    }
+
+    // Check ownership
+    const existing = await prisma.$queryRaw<any[]>`
+      SELECT * FROM lesson_types WHERE id = ${id as string}
+    `;
+    if (existing.length === 0 || existing[0].teacherId !== userId) {
+      return res.status(404).json({ error: 'Lesson type not found' });
+    }
+
+    await prisma.$executeRaw`
+      DELETE FROM lesson_types WHERE id = ${id as string}
+    `;
+
+    return res.status(204).end();
+  }
+
+    return res.status(405).json({ error: 'Method not allowed' });
+  } catch (error) {
+    console.error('Error in handleLessonTypes:', error);
+    throw error;
+  }
+}
+
+// Handler for Personal Schedule (CRUD) - using raw SQL
+async function handleSchedule(req: VercelRequest, res: VercelResponse, userId: string) {
+  try {
+    const { id } = req.query;
+
+    // Получаем данные пользователя для проверки организации
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { organizationId: true, role: true }
+    });
+
+    if (!currentUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (req.method === 'GET') {
+    if (id) {
+      const slot = await prisma.$queryRaw<any[]>`
+        SELECT
+          s.*,
+          json_build_object(
+            'id', lt.id,
+            'name', lt.name,
+            'color', lt.color,
+            'pricePerHour', lt."pricePerHour"
+          ) as "lessonType",
+          CASE
+            WHEN st.id IS NOT NULL THEN json_build_object('id', st.id, 'fullName', st."fullName")
+            ELSE NULL
+          END as "student",
+          CASE
+            WHEN g.id IS NOT NULL THEN json_build_object('id', g.id, 'name', g.name)
+            ELSE NULL
+          END as "group"
+        FROM personal_schedule_slots s
+        LEFT JOIN lesson_types lt ON s."lessonTypeId" = lt.id
+        LEFT JOIN students st ON s."studentId" = st.id
+        LEFT JOIN groups g ON s."groupId" = g.id
+        WHERE s.id = ${id as string}
+      `;
+      if (slot.length === 0 || slot[0].teacherId !== userId) {
+        return res.status(404).json({ error: 'Schedule slot not found' });
+      }
+      return res.json(slot[0]);
+    } else {
+      // Все пользователи (включая администраторов) видят только СВОЁ расписание
+      const slots = await prisma.$queryRaw<any[]>`
+        SELECT
+          s.*,
+          json_build_object(
+            'id', lt.id,
+            'name', lt.name,
+            'color', lt.color,
+            'pricePerHour', lt."pricePerHour"
+          ) as "lessonType",
+          CASE
+            WHEN st.id IS NOT NULL THEN json_build_object('id', st.id, 'fullName', st."fullName")
+            ELSE NULL
+          END as "student",
+          CASE
+            WHEN g.id IS NOT NULL THEN json_build_object('id', g.id, 'name', g.name)
+            ELSE NULL
+          END as "group"
+        FROM personal_schedule_slots s
+        LEFT JOIN lesson_types lt ON s."lessonTypeId" = lt.id
+        LEFT JOIN students st ON s."studentId" = st.id
+        LEFT JOIN groups g ON s."groupId" = g.id
+        WHERE s."teacherId" = ${userId}
+        ORDER BY s."dayOfWeek" ASC, s.time ASC
+      `;
+      return res.json(slots);
+    }
+  }
+
+  if (req.method === 'POST') {
+    const { dayOfWeek, time, lessonTypeId, studentName, studentId, groupId } = req.body;
+    if (dayOfWeek === undefined || !time || !lessonTypeId) {
+      return res.status(400).json({ error: 'dayOfWeek, time, and lessonTypeId are required' });
+    }
+
+    const slotId = crypto.randomUUID();
+
+    // Use ON CONFLICT to handle duplicates
+    await prisma.$executeRaw`
+      INSERT INTO personal_schedule_slots (id, "dayOfWeek", time, "studentName", "studentId", "groupId", "teacherId", "lessonTypeId", "createdAt", "updatedAt")
+      VALUES (${slotId}, ${parseInt(dayOfWeek)}, ${time}, ${studentName || null}, ${studentId || null}, ${groupId || null}, ${userId}, ${lessonTypeId}, NOW(), NOW())
+      ON CONFLICT ("teacherId", "dayOfWeek", time)
+      DO UPDATE SET
+        "studentName" = EXCLUDED."studentName",
+        "studentId" = EXCLUDED."studentId",
+        "groupId" = EXCLUDED."groupId",
+        "lessonTypeId" = EXCLUDED."lessonTypeId",
+        "updatedAt" = NOW()
+    `;
+
+    // Get the slot (either newly created or updated)
+    const slot = await prisma.$queryRaw<any[]>`
+      SELECT
+        s.*,
+        json_build_object(
+          'id', lt.id,
+          'name', lt.name,
+          'color', lt.color,
+          'pricePerHour', lt."pricePerHour"
+        ) as "lessonType",
+        CASE
+          WHEN st.id IS NOT NULL THEN json_build_object('id', st.id, 'fullName', st."fullName")
+          ELSE NULL
+        END as "student",
+        CASE
+          WHEN g.id IS NOT NULL THEN json_build_object('id', g.id, 'name', g.name)
+          ELSE NULL
+        END as "group"
+      FROM personal_schedule_slots s
+      LEFT JOIN lesson_types lt ON s."lessonTypeId" = lt.id
+      LEFT JOIN students st ON s."studentId" = st.id
+      LEFT JOIN groups g ON s."groupId" = g.id
+      WHERE s."teacherId" = ${userId}
+        AND s."dayOfWeek" = ${parseInt(dayOfWeek)}
+        AND s.time = ${time}
+    `;
+
+    return res.status(201).json(slot[0]);
+  }
+
+  if (req.method === 'PUT') {
+    if (!id) {
+      return res.status(400).json({ error: 'Schedule slot ID required' });
+    }
+
+    const { dayOfWeek, time, lessonTypeId, studentName, studentId, groupId } = req.body;
+
+    // Check ownership
+    const existing = await prisma.$queryRaw<any[]>`
+      SELECT * FROM personal_schedule_slots WHERE id = ${id as string}
+    `;
+    if (existing.length === 0 || existing[0].teacherId !== userId) {
+      return res.status(404).json({ error: 'Schedule slot not found' });
+    }
+
+    await prisma.$executeRaw`
+      UPDATE personal_schedule_slots
+      SET
+        "dayOfWeek" = COALESCE(${dayOfWeek !== undefined ? parseInt(dayOfWeek) : null}, "dayOfWeek"),
+        time = COALESCE(${time}, time),
+        "lessonTypeId" = COALESCE(${lessonTypeId}, "lessonTypeId"),
+        "studentName" = ${studentName !== undefined ? studentName : existing[0].studentName},
+        "studentId" = ${studentId !== undefined ? studentId : existing[0].studentId},
+        "groupId" = ${groupId !== undefined ? groupId : existing[0].groupId},
+        "updatedAt" = NOW()
+      WHERE id = ${id as string}
+    `;
+
+    const slot = await prisma.$queryRaw<any[]>`
+      SELECT
+        s.*,
+        json_build_object(
+          'id', lt.id,
+          'name', lt.name,
+          'color', lt.color,
+          'pricePerHour', lt."pricePerHour"
+        ) as "lessonType",
+        CASE
+          WHEN st.id IS NOT NULL THEN json_build_object('id', st.id, 'fullName', st."fullName")
+          ELSE NULL
+        END as "student",
+        CASE
+          WHEN g.id IS NOT NULL THEN json_build_object('id', g.id, 'name', g.name)
+          ELSE NULL
+        END as "group"
+      FROM personal_schedule_slots s
+      LEFT JOIN lesson_types lt ON s."lessonTypeId" = lt.id
+      LEFT JOIN students st ON s."studentId" = st.id
+      LEFT JOIN groups g ON s."groupId" = g.id
+      WHERE s.id = ${id as string}
+    `;
+
+    return res.json(slot[0]);
+  }
+
+  if (req.method === 'DELETE') {
+    if (!id) {
+      return res.status(400).json({ error: 'Schedule slot ID required' });
+    }
+
+    // Check ownership
+    const existing = await prisma.$queryRaw<any[]>`
+      SELECT * FROM personal_schedule_slots WHERE id = ${id as string}
+    `;
+    if (existing.length === 0 || existing[0].teacherId !== userId) {
+      return res.status(404).json({ error: 'Schedule slot not found' });
+    }
+
+    await prisma.$executeRaw`
+      DELETE FROM personal_schedule_slots WHERE id = ${id as string}
+    `;
+
+    return res.status(204).end();
+  }
+
+    return res.status(405).json({ error: 'Method not allowed' });
+  } catch (error) {
+    console.error('Error in handleSchedule:', error);
+    throw error;
+  }
+}
+
+// Helper function to calculate period end date
+function getPeriodEndDate(periodStart: string): string {
+  const [year, month, day] = periodStart.split('-').map(Number);
+  const startDate = new Date(year, month - 1, day);
+
+  // Check if this is a period start (day 1 or 16) or a regular week start
+  // Period requests ALWAYS use day 1 or 16
+  if (day === 1) {
+    // First half of month: 1-15
+    return `${year}-${String(month).padStart(2, '0')}-15`;
+  } else if (day === 16) {
+    // Second half of month: 16-end of month
+    const lastDay = new Date(year, month, 0).getDate(); // Last day of month
+    return `${year}-${String(month).padStart(2, '0')}-${lastDay}`;
+  } else {
+    // Regular week: add 6 days to get end of week
+    startDate.setDate(startDate.getDate() + 6);
+    const endYear = startDate.getFullYear();
+    const endMonth = String(startDate.getMonth() + 1).padStart(2, '0');
+    const endDay = String(startDate.getDate()).padStart(2, '0');
+    return `${endYear}-${endMonth}-${endDay}`;
+  }
+}
+
+// Handler for Completed Lessons - using raw SQL
+async function handleCompleted(req: VercelRequest, res: VercelResponse, userId: string) {
+  try {
+    const { scheduleSlotId, weekStart } = req.query;
+
+    // Получаем данные пользователя для проверки организации
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { organizationId: true, role: true }
+    });
+
+    if (!currentUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (req.method === 'GET') {
+      if (!weekStart) {
+        return res.status(400).json({ error: 'weekStart is required' });
+      }
+
+      // Calculate period end date for filtering
+      const periodEnd = getPeriodEndDate(weekStart as string);
+
+      // ✅ AUTO-CREATE completed_lessons records for the requested week
+      // This ensures every slot has a record for tracking completed/paid status
+      const weekStartStr = weekStart as string;
+
+      // Get all schedule slots for this teacher
+      const teacherSlots = await prisma.personalScheduleSlot.findMany({
+        where: { teacherId: userId },
+        select: { id: true }
+      });
+
+      // For each slot, ensure a completed_lessons record exists for this week
+      for (const slot of teacherSlots) {
+        const existing = await prisma.completedLesson.findFirst({
+          where: {
+            scheduleSlotId: slot.id,
+            weekStart: weekStartStr
+          }
+        });
+
+        if (!existing) {
+          // Create a new record with default values (not completed, not paid)
+          await prisma.completedLesson.create({
+            data: {
+              scheduleSlotId: slot.id,
+              weekStart: weekStartStr,
+              completed: false,
+              paid: false
+            }
+          });
+        }
+      }
+
+      // Все пользователи (включая администраторов) видят только СВОЁ расписание и оплаты
+      // ✅ Учитываем недельные переопределения расписания (schedule_overrides)
+      const slots = await prisma.$queryRaw<any[]>`
+        SELECT
+          s.id,
+          s."teacherId",
+          s."lessonTypeId",
+          s."studentId",
+          s."groupId",
+          s."studentName",
+          s."createdAt",
+          s."updatedAt",
+          -- ✅ Базовые значения (из personal_schedule_slots)
+          s."dayOfWeek" as "baseDayOfWeek",
+          s.time as "baseTime",
+          -- ✅ Применяем переопределение если существует для этой недели
+          COALESCE(so."newDayOfWeek", s."dayOfWeek") as "dayOfWeek",
+          COALESCE(so."newTime", s.time) as time,
+          -- Добавляем флаг, что расписание переопределено для этой недели
+          CASE WHEN so.id IS NOT NULL THEN true ELSE false END as "hasOverride",
+          so.id as "overrideId",
+          json_build_object(
+            'id', lt.id,
+            'name', lt.name,
+            'color', lt.color,
+            'pricePerHour', lt."pricePerHour"
+          ) as "lessonType",
+          CASE
+            WHEN st.id IS NOT NULL THEN json_build_object('id', st.id, 'fullName', st."fullName")
+            ELSE NULL
+          END as "student",
+          CASE
+            WHEN g.id IS NOT NULL THEN json_build_object('id', g.id, 'name', g.name)
+            ELSE NULL
+          END as "group",
+          COALESCE(
+            json_agg(
+              json_build_object(
+                'id', cl.id,
+                'weekStart', cl."weekStart",
+                'completed', cl.completed,
+                'paid', cl.paid,
+                'customPrice', cl."customPrice",
+                'customStudentName', cl."customStudentName",
+                'customStudentId', cl."customStudentId",
+                'customGroupId', cl."customGroupId",
+                'customLessonTypeId', cl."customLessonTypeId",
+                'customLessonType', CASE
+                  WHEN clt.id IS NOT NULL THEN json_build_object(
+                    'id', clt.id,
+                    'name', clt.name,
+                    'color', clt.color,
+                    'pricePerHour', clt."pricePerHour"
+                  )
+                  ELSE NULL
+                END,
+                'customStudent', CASE
+                  WHEN cst.id IS NOT NULL THEN json_build_object('id', cst.id, 'fullName', cst."fullName")
+                  ELSE NULL
+                END,
+                'customGroup', CASE
+                  WHEN cg.id IS NOT NULL THEN json_build_object('id', cg.id, 'name', cg.name)
+                  ELSE NULL
+                END
+              )
+            ) FILTER (WHERE cl.id IS NOT NULL AND cl."weekStart" >= ${weekStart as string} AND cl."weekStart" <= ${periodEnd}),
+            '[]'::json
+          ) as "completedLessons"
+        FROM personal_schedule_slots s
+        -- ✅ LEFT JOIN с переопределениями для текущей недели
+        LEFT JOIN schedule_overrides so ON s.id = so."scheduleSlotId"
+          AND so."weekStart" = ${weekStartStr}::date
+          AND so."isActive" = true
+        LEFT JOIN lesson_types lt ON s."lessonTypeId" = lt.id
+        LEFT JOIN students st ON s."studentId" = st.id
+        LEFT JOIN groups g ON s."groupId" = g.id
+        LEFT JOIN completed_lessons cl ON s.id = cl."scheduleSlotId"
+        LEFT JOIN lesson_types clt ON cl."customLessonTypeId" = clt.id
+        LEFT JOIN students cst ON cl."customStudentId" = cst.id
+        LEFT JOIN groups cg ON cl."customGroupId" = cg.id
+        WHERE s."teacherId" = ${userId}
+        GROUP BY s.id, lt.id, st.id, g.id, so.id, so."newDayOfWeek", so."newTime"
+        -- ✅ Сортируем по ПЕРЕОПРЕДЕЛЕННОМУ расписанию (если есть) или базовому
+        ORDER BY COALESCE(so."newDayOfWeek", s."dayOfWeek") ASC, COALESCE(so."newTime", s.time) ASC
+      `;
+
+      return res.json(slots);
+    }
+
+    if (req.method === 'POST' || req.method === 'PUT') {
+      const {
+        scheduleSlotId: bodySlotId,
+        weekStart: bodyWeekStart,
+        completed,
+        paid,
+        customPrice,
+        customStudentName,
+        customStudentId,
+        customGroupId,
+        customLessonTypeId
+      } = req.body;
+      const slotId = scheduleSlotId || bodySlotId;
+      const week = weekStart || bodyWeekStart;
+
+      if (!slotId || !week) {
+        return res.status(400).json({ error: 'scheduleSlotId and weekStart are required' });
+      }
+
+      // Verify ownership
+      const slot = await prisma.$queryRaw<any[]>`
+        SELECT * FROM personal_schedule_slots WHERE id = ${slotId as string}
+      `;
+      if (slot.length === 0 || slot[0].teacherId !== userId) {
+        return res.status(404).json({ error: 'Schedule slot not found' });
+      }
+
+      // ✅ VALIDATE weekStart: must be a Monday
+      // This prevents bugs where frontend sends wrong week (e.g., viewing week 9-15 but marking lessons for week 16-22)
+      const weekStartDate = new Date(week as string);
+      const dayOfWeek = weekStartDate.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+      if (dayOfWeek !== 1) {
+        return res.status(400).json({
+          error: `weekStart must be a Monday. Received: ${week} (day ${dayOfWeek})`,
+          hint: 'Use format YYYY-MM-DD where DD is a Monday'
+        });
+      }
+
+      // ✅ VALIDATE that weekStart is appropriate for this slot's dayOfWeek
+      // Calculate the actual lesson date: weekStart + dayOffset
+      const slotDayOfWeek = slot[0].dayOfWeek as number; // 0=Sun, 1=Mon, ..., 6=Sat
+      const dayOffset = slotDayOfWeek === 0 ? 6 : slotDayOfWeek - 1; // Mon=0, Tue=1, ..., Sun=6
+      const lessonDate = new Date(weekStartDate);
+      lessonDate.setDate(weekStartDate.getDate() + dayOffset);
+
+      // Find the Monday of the week containing lessonDate
+      const lessonDayOfWeek = lessonDate.getDay();
+      const correctMondayOffset = lessonDayOfWeek === 0 ? -6 : 1 - lessonDayOfWeek;
+      const correctMonday = new Date(lessonDate);
+      correctMonday.setDate(lessonDate.getDate() + correctMondayOffset);
+      const correctMondayStr = correctMonday.toISOString().split('T')[0];
+
+      // If weekStart doesn't match the calculated Monday, return error
+      if (week !== correctMondayStr) {
+        return res.status(400).json({
+          error: `weekStart mismatch for slot dayOfWeek=${slotDayOfWeek}`,
+          received: week,
+          expected: correctMondayStr,
+          hint: `This lesson on day ${slotDayOfWeek} should belong to week ${correctMondayStr}`
+        });
+      }
+
+      // Check if completed lesson exists
+      const existing = await prisma.$queryRaw<any[]>`
+        SELECT * FROM completed_lessons
+        WHERE "scheduleSlotId" = ${slotId as string} AND "weekStart" = ${week as string}
+      `;
+
+      if (existing.length > 0) {
+        // Update
+        await prisma.$executeRaw`
+          UPDATE completed_lessons
+          SET
+            completed = COALESCE(${completed !== undefined ? completed : null}, completed),
+            paid = COALESCE(${paid !== undefined ? paid : null}, paid),
+            "customPrice" = ${customPrice !== undefined ? (customPrice !== null ? parseFloat(customPrice) : null) : existing[0].customPrice},
+            "customStudentName" = ${customStudentName !== undefined ? customStudentName : existing[0].customStudentName},
+            "customStudentId" = ${customStudentId !== undefined ? customStudentId : existing[0].customStudentId},
+            "customGroupId" = ${customGroupId !== undefined ? customGroupId : existing[0].customGroupId},
+            "customLessonTypeId" = ${customLessonTypeId !== undefined ? customLessonTypeId : existing[0].customLessonTypeId},
+            "updatedAt" = NOW()
+          WHERE "scheduleSlotId" = ${slotId as string} AND "weekStart" = ${week as string}
+        `;
+      } else {
+        // Insert
+        const lessonId = crypto.randomUUID();
+        await prisma.$executeRaw`
+          INSERT INTO completed_lessons (
+            id, "scheduleSlotId", "weekStart", completed, paid,
+            "customPrice", "customStudentName", "customStudentId", "customGroupId", "customLessonTypeId",
+            "createdAt", "updatedAt"
+          )
+          VALUES (
+            ${lessonId},
+            ${slotId as string},
+            ${week as string},
+            ${completed !== undefined ? completed : false},
+            ${paid !== undefined ? paid : false},
+            ${customPrice !== undefined && customPrice !== null ? parseFloat(customPrice) : null},
+            ${customStudentName !== undefined ? customStudentName : null},
+            ${customStudentId !== undefined ? customStudentId : null},
+            ${customGroupId !== undefined ? customGroupId : null},
+            ${customLessonTypeId !== undefined ? customLessonTypeId : null},
+            NOW(),
+            NOW()
+          )
+        `;
+      }
+
+      const completedLesson = await prisma.$queryRaw<any[]>`
+        SELECT
+          cl.*,
+          CASE
+            WHEN clt.id IS NOT NULL THEN json_build_object(
+              'id', clt.id,
+              'name', clt.name,
+              'color', clt.color,
+              'pricePerHour', clt."pricePerHour"
+            )
+            ELSE NULL
+          END as "customLessonType"
+        FROM completed_lessons cl
+        LEFT JOIN lesson_types clt ON cl."customLessonTypeId" = clt.id
+        WHERE cl."scheduleSlotId" = ${slotId as string} AND cl."weekStart" = ${week as string}
+      `;
+      console.log("[AUTO-ATTENDANCE CHECK] completed:", completed, "slotId:", slotId);
+
+      // Auto-mark attendance when lesson is marked as completed
+      if (completed === true) {
+        try {
+          // Calculate lesson date from weekStart (Monday) + dayOfWeek
+          // dayOfWeek: 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
+          const weekStartDate = new Date(week as string);
+          const dow = slot[0].dayOfWeek as number;
+          const dayOffset = dow === 0 ? 6 : dow - 1; // Monday=0 offset, Sunday=6 offset
+          const lessonDate = new Date(weekStartDate);
+          lessonDate.setDate(weekStartDate.getDate() + dayOffset);
+          const dd = String(lessonDate.getDate()).padStart(2, '0');
+          const mm = String(lessonDate.getMonth() + 1).padStart(2, '0');
+          const dateStr = `${dd}.${mm}`; // DD.MM format used in attendance
+
+          const studentId = slot[0].studentId as string | null;
+          const groupId = slot[0].groupId as string | null;
+          console.log("[AUTO-ATTENDANCE] studentId:", studentId, "groupId:", groupId, "date:", dateStr);
+
+          if (studentId) {
+            // Individual lesson — mark that student as present
+            await prisma.attendance.upsert({
+              where: { studentId_date: { studentId, date: dateStr } },
+              update: {}, // Don't override if already set manually
+              create: { studentId, date: dateStr, status: 'present', teacherId: userId, groupId: groupId || null }
+            });
+
+            // Deduct lesson from student's prepaid balance
+            const student = await prisma.student.findUnique({
+              where: { id: studentId },
+              select: { lessonsBalance: true }
+            });
+            if (student && student.lessonsBalance && student.lessonsBalance > 0) {
+              await prisma.student.update({
+                where: { id: studentId },
+                data: {
+                  lessonsBalance: student.lessonsBalance - 1,
+                  lessonsBalanceUpdatedAt: new Date()
+                }
+              });
+            }
+          } else if (groupId) {
+            // Group lesson — mark ALL students in the group as present
+            const groupStudents = await prisma.student.findMany({ where: { groupId } });
+            console.log("[AUTO-ATTENDANCE] Group lesson - students:", groupStudents.length);
+            for (const student of groupStudents) {
+              await prisma.attendance.upsert({
+                where: { studentId_date: { studentId: student.id, date: dateStr } },
+                update: {}, // Don't override if already set manually
+                create: { studentId: student.id, date: dateStr, status: 'present', teacherId: userId, groupId }
+              });
+
+              // Deduct lesson from each student's prepaid balance
+              if (student.lessonsBalance && student.lessonsBalance > 0) {
+                await prisma.student.update({
+                  where: { id: student.id },
+                  data: {
+                    lessonsBalance: student.lessonsBalance - 1,
+                    lessonsBalanceUpdatedAt: new Date()
+                  }
+                });
+              }
+            }
+          }
+        } catch (attendanceError) {
+          // Don't fail the whole request if attendance auto-mark fails
+          console.error('Error auto-marking attendance:', attendanceError);
+        }
+      }
+
+      return res.json(completedLesson[0]);
+    }
+
+    return res.status(405).json({ error: 'Method not allowed' });
+  } catch (error) {
+    console.error('Error in handleCompleted:', error);
+    throw error;
+  }
+}
+
+// Handler for calculating week/period earnings - using raw SQL
+async function handleWeekEarnings(req: VercelRequest, res: VercelResponse, userId: string) {
+  try {
+    if (req.method !== 'GET') {
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    const { weekStart, isPeriod: isPeriodParam } = req.query;
+    if (!weekStart) {
+      return res.status(400).json({ error: 'weekStart is required' });
+    }
+
+    // Calculate period end date for filtering
+    const periodEnd = getPeriodEndDate(weekStart as string);
+
+    // For periods (1-15 or 16-end), we need to sum across all weeks in the period
+    // For regular weeks, we only count the specific week
+    const [year, month, day] = (weekStart as string).split('-').map(Number);
+
+    // Check if this is a period request or a week request
+    // Option 1: Explicit isPeriod parameter (preferred)
+    // Option 2: Fallback logic based on date
+    let isPeriod: boolean;
+
+    if (isPeriodParam !== undefined) {
+      // Explicit parameter takes precedence
+      isPeriod = isPeriodParam === 'true' || isPeriodParam === true;
+    } else {
+      // Fallback: Period requests use day 1 or 16 AND are NOT Mondays
+      const weekStartDate = new Date(weekStart as string);
+      const dayOfWeek = weekStartDate.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+      const isMonday = (dayOfWeek === 1);
+
+      // If it's Monday, it's a week request (even if day is 1 or 16)
+      // If it's NOT Monday AND day is 1 or 16, it's a period request
+      isPeriod = !isMonday && (day === 1 || day === 16);
+    }
+
+    console.log(`[handleWeekEarnings] ===== EARNINGS CALCULATION =====`);
+    console.log(`  weekStart: ${weekStart}`);
+    console.log(`  day of month: ${day}`);
+    console.log(`  isPeriodParam: ${isPeriodParam}`);
+    console.log(`  isPeriod: ${isPeriod} (${isPeriodParam ? 'explicit param' : 'auto-detected'})`);
+    console.log(`  periodEnd: ${periodEnd}`);
+    console.log(`[handleWeekEarnings] ==============================`);
+
+    let earningsQuery;
+    if (isPeriod) {
+      // Period calculation: sum all weeks in the period
+      // Count ALL lessons (including not completed), completed lessons, and paid lessons
+      // Use customPrice if set, otherwise use standard price from lesson type
+      earningsQuery = prisma.$queryRaw<any[]>`
+        SELECT
+          COUNT(DISTINCT cl.id) as "totalLessons",
+          COUNT(DISTINCT cl.id) FILTER (WHERE cl.completed = true) as "completedCount",
+          COUNT(DISTINCT cl.id) FILTER (WHERE cl.paid = true) as "paidCount",
+          COALESCE(SUM(
+            CASE WHEN cl.paid = true
+              THEN COALESCE(cl."customPrice", clt."pricePerHour", lt."pricePerHour")
+              ELSE 0
+            END
+          ), 0) as "totalEarnings",
+          COUNT(DISTINCT s.id) as "totalSlots"
+        FROM completed_lessons cl
+        INNER JOIN personal_schedule_slots s ON cl."scheduleSlotId" = s.id
+        INNER JOIN lesson_types lt ON s."lessonTypeId" = lt.id
+        LEFT JOIN lesson_types clt ON cl."customLessonTypeId" = clt.id
+        WHERE s."teacherId" = ${userId}
+          AND cl."weekStart" >= ${weekStart as string}
+          AND cl."weekStart" <= ${periodEnd}
+      `;
+    } else {
+      // Week calculation: count only lessons with exact weekStart
+      // Count ALL lessons (including not completed), completed lessons, and paid lessons
+      // Use customPrice if set, otherwise use standard price from lesson type
+      earningsQuery = prisma.$queryRaw<any[]>`
+        SELECT
+          COUNT(DISTINCT cl.id) as "totalLessons",
+          COUNT(DISTINCT cl.id) FILTER (WHERE cl.completed = true) as "completedCount",
+          COUNT(DISTINCT cl.id) FILTER (WHERE cl.paid = true) as "paidCount",
+          COALESCE(SUM(
+            CASE WHEN cl.paid = true
+              THEN COALESCE(cl."customPrice", clt."pricePerHour", lt."pricePerHour")
+              ELSE 0
+            END
+          ), 0) as "totalEarnings",
+          COUNT(DISTINCT s.id) as "totalSlots"
+        FROM completed_lessons cl
+        INNER JOIN personal_schedule_slots s ON cl."scheduleSlotId" = s.id
+        INNER JOIN lesson_types lt ON s."lessonTypeId" = lt.id
+        LEFT JOIN lesson_types clt ON cl."customLessonTypeId" = clt.id
+        WHERE s."teacherId" = ${userId}
+          AND cl."weekStart" = ${weekStart as string}
+      `;
+    }
+
+    const result = await earningsQuery;
+
+    return res.json({
+      weekStart,
+      totalLessons: parseInt(result[0].totalLessons || '0'),
+      totalEarnings: parseFloat(result[0].totalEarnings || '0'),
+      completedCount: parseInt(result[0].completedCount || '0'),
+      paidCount: parseInt(result[0].paidCount || '0'),
+      totalSlots: parseInt(result[0].totalSlots || '0')
+    });
+  } catch (error) {
+    console.error('Error in handleWeekEarnings:', error);
+    throw error;
+  }
+}

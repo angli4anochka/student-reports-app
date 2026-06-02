@@ -1,0 +1,503 @@
+import React, { useState, useEffect } from 'react';
+import { api } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import AddStudentModal from './AddStudentModal';
+
+interface Group {
+  id: string;
+  name: string;
+  description?: string;
+  isOwner?: boolean;
+  isShared?: boolean;
+}
+
+interface ScheduleSlot {
+  id: string;
+  dayOfWeek: number;
+  time: string;
+  studentName?: string;
+  lessonTypeId: string;
+  lessonType?: { id: string; name: string; color: string; pricePerHour: number };
+  completedLessons?: { id: string; weekStart: string; completed: boolean; paid: boolean }[];
+}
+
+interface Lesson {
+  id: string;
+  date: string;
+  topic: string;
+  homework?: string | null;
+  studentId?: string | null;
+  student?: { id: string; fullName: string } | null;
+  group?: { id: string; name: string } | null;
+}
+
+// ─── helpers ────────────────────────────────────────────────
+function getGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Доброе утро';
+  if (h < 18) return 'Добрый день';
+  return 'Добрый вечер';
+}
+
+function todayISO(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dd}`;
+}
+
+function currentWeekStart(): string {
+  const today = new Date();
+  const day = today.getDay();
+  const diff = today.getDate() - day + (day === 0 ? -6 : 1);
+  const monday = new Date(today);
+  monday.setDate(diff);
+  monday.setHours(0, 0, 0, 0);
+  const y = monday.getFullYear();
+  const m = String(monday.getMonth() + 1).padStart(2, '0');
+  const d = String(monday.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function todayDayOfWeek(): number {
+  // 0=Mon … 6=Sun (same as backend)
+  const d = new Date().getDay();
+  return d === 0 ? 6 : d - 1;
+}
+
+// "10:00:00" | "10:00" → "10:00"
+function formatTime(t: string): string {
+  const parts = (t || '').split(':');
+  return `${parts[0]}:${parts[1] || '00'}`;
+}
+
+// "2026-02-04" → "04.02"  (ISO → lesson date format)
+function isoToDotDate(iso: string): string {
+  const [, m, d] = iso.split('-');
+  return `${d}.${m}`;
+}
+
+// "04.02" → "2026-02-04"  (lesson date → ISO, assumes academic year)
+function dotDateToISO(dotDate: string): string {
+  const [d, m] = dotDate.split('.');
+  const month = parseInt(m, 10);
+  const year = month >= 9 ? 2025 : 2026;
+  return `${year}-${m}-${d}`;
+}
+
+// Find the best matching lesson for a schedule slot by student name.
+// Lessons can be: (a) individual (student.fullName set), or (b) group-based (group.name set, student null).
+// slot.studentName is a free-text field like "Вика", "Саша Иванов", "4 кл", "2б класс"
+function findLessonsForSlot(lessons: Lesson[], slot: ScheduleSlot): Lesson[] {
+  if (!slot.studentName) return [];
+  const slotName = slot.studentName.trim().toLowerCase();
+
+  return lessons.filter(l => {
+    // Match by individual student name (exact or partial)
+    if (l.student?.fullName) {
+      const stuName = l.student.fullName.trim().toLowerCase();
+      // "Вика" matches "Иванова Вика" or "Вика"
+      if (stuName === slotName || stuName.includes(slotName) || slotName.includes(stuName)) {
+        return true;
+      }
+    }
+    // Match by group name (for group lessons)
+    if (l.group?.name) {
+      const grpName = l.group.name.trim().toLowerCase();
+      if (grpName === slotName || grpName.includes(slotName) || slotName.includes(grpName)) {
+        return true;
+      }
+    }
+    return false;
+  });
+}
+
+// ─── component ──────────────────────────────────────────────
+const ManagementDashboard: React.FC = () => {
+  const { user } = useAuth();
+
+  // ── state ─────────────────────────────────────────────────
+  const [students, setStudents] = useState<any[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [todaySlots, setTodaySlots] = useState<ScheduleSlot[]>([]);
+  const [todayLessons, setTodayLessons] = useState<Lesson[]>([]);
+  const [allLessons, setAllLessons] = useState<Lesson[]>([]);
+  const [showAddStudent, setShowAddStudent] = useState(false);
+  const [loading, setLoading] = useState(true);
+  // checkbox state: slotId → completed | hwState
+  const [slotCompleted, setSlotCompleted] = useState<Record<string, boolean>>({});
+  const [slotHw, setSlotHw] = useState<Record<string, 'none' | 'assigned' | 'checked'>>({});
+
+  // ── load ──────────────────────────────────────────────────
+  useEffect(() => {
+    loadAll();
+  }, []);
+
+  const loadAll = async () => {
+    try {
+      // Load data separately to handle errors gracefully
+      const studentsData = await api.getStudents({}).catch(err => {
+        console.error('Error loading students:', err);
+        return [];
+      });
+
+      const schedule = await api.getCompletedLessons(currentWeekStart()).catch(err => {
+        console.error('Error loading schedule:', err);
+        return [];
+      });
+
+      const lessons = await api.getLessons({}).catch(err => {
+        console.error('Error loading lessons:', err);
+        return [];
+      });
+
+      const groupsData = await api.getGroups().catch(err => {
+        console.error('Error loading groups:', err);
+        return [];
+      });
+
+      setStudents(studentsData);
+      setGroups(groupsData);
+
+      // filter schedule to today
+      const dow = todayDayOfWeek();
+      console.log('[ManagementDashboard] Today day of week:', dow);
+      console.log('[ManagementDashboard] All schedule slots:', schedule);
+      const today = (schedule as ScheduleSlot[]).filter(s => s.dayOfWeek === dow);
+      console.log('[ManagementDashboard] Filtered today slots:', today);
+      // sort by time
+      today.sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+      setTodaySlots(today);
+
+      // init completed checkboxes from server data
+      const ws = currentWeekStart();
+      const cMap: Record<string, boolean> = {};
+      today.forEach(s => {
+        const cl = (s.completedLessons || []).find(c => c.weekStart === ws);
+        cMap[s.id] = cl?.completed ?? false;
+      });
+      setSlotCompleted(cMap);
+      setSlotHw({});
+
+      // store all lessons; filter today's for topic
+      const allL = lessons as Lesson[];
+      setAllLessons(allL);
+      // Lessons store dates as "DD.MM", convert today to that format for matching
+      const todayDot = isoToDotDate(todayISO());
+      const todayL = allL.filter(l => l.date === todayDot);
+      setTodayLessons(todayL);
+
+    } catch (e) {
+      console.error('ManagementDashboard load error:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ── derived ───────────────────────────────────────────────
+  const weekStart = currentWeekStart();
+
+  // today's paid from schedule slots (use server data for paid flag)
+  const todayPaid = todaySlots.filter(s => {
+    const cl = (s.completedLessons || []).find(c => c.weekStart === weekStart);
+    return cl?.paid;
+  });
+
+  // daily earnings = sum of pricePerHour for today's paid slots
+  const dayEarnings = todayPaid.reduce((sum, s) => sum + (s.lessonType?.pricePerHour || 0), 0);
+
+  // missed = past slots not yet marked completed
+  const nowHour = new Date().getHours();
+  const missedToday = todaySlots.filter(s => {
+    const slotHour = parseInt((s.time || '0').split(':')[0], 10);
+    return slotHour <= nowHour && !slotCompleted[s.id];
+  }).length;
+
+  // active = future slots + past slots marked completed (cancelled ones excluded)
+  const activeToday = todaySlots.filter(s => {
+    const slotHour = parseInt((s.time || '0').split(':')[0], 10);
+    return slotHour > nowHour || !!slotCompleted[s.id];
+  }).length;
+
+  // ДЗ не проверено = количество сегодняшних студентов, у которых есть homework в предыдущем уроке
+  const homeworkNotChecked = todaySlots.filter(slot => {
+    const matched = findLessonsForSlot(allLessons, slot);
+    // previous lessons = those with date before today (compare as ISO for proper ordering)
+    const prev = matched
+      .filter(l => dotDateToISO(l.date) < todayISO())
+      .sort((a, b) => dotDateToISO(b.date).localeCompare(dotDateToISO(a.date)));
+    const prevLesson = prev[0];
+    return prevLesson?.homework && prevLesson.homework.trim() !== '';
+  }).length;
+
+  // ── handlers ──────────────────────────────────────────────
+  const toggleCompleted = async (slotId: string) => {
+    const newVal = !slotCompleted[slotId];
+    setSlotCompleted(prev => ({ ...prev, [slotId]: newVal }));
+    try {
+      await api.markLessonCompleted({ scheduleSlotId: slotId, weekStart, completed: newVal });
+    } catch (e) {
+      // rollback on error
+      setSlotCompleted(prev => ({ ...prev, [slotId]: !newVal }));
+      console.error('markLessonCompleted error:', e);
+    }
+  };
+
+  const toggleHw = (slotId: string) => {
+    setSlotHw(prev => {
+      const cur = prev[slotId] || 'none';
+      const next = cur === 'none' ? 'assigned' : cur === 'assigned' ? 'checked' : 'none';
+      return { ...prev, [slotId]: next };
+    });
+  };
+
+  // ── render ────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16 text-slate-400 text-sm">
+        Загрузка…
+      </div>
+    );
+  }
+
+  const firstName = user?.fullName?.split(' ')[0] || 'Учитель';
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* ── LEFT + CENTER (2 cols) ──────────────────────────── */}
+      <div className="lg:col-span-2 flex flex-col gap-4">
+
+        {/* Greeting card */}
+        <div className="relative overflow-hidden bg-white/70 backdrop-blur-xl border border-white/60 rounded-3xl p-6"
+             style={{ boxShadow: '0 35px 90px -45px rgba(0,0,0,0.30)' }}>
+          {/* decorative blob */}
+          <div className="absolute -top-10 -right-10 w-48 h-48 bg-blue-200 opacity-30 rounded-full blur-3xl pointer-events-none" />
+          <div className="relative z-10">
+            <p className="text-slate-500 text-sm mb-0.5">
+              {getGreeting()}, {firstName}
+            </p>
+            <h2 className="text-xl font-bold text-slate-800 mt-0 mb-2">
+              Сегодня у вас {activeToday} {activeToday === 1 ? 'урок' : activeToday >= 2 && activeToday <= 4 ? 'урока' : 'уроков'}
+            </h2>
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-slate-500 text-sm">Доход за день</span>
+                <span className="font-bold text-slate-800 text-base">
+                  {dayEarnings} ₽
+                </span>
+              </div>
+              <button
+                onClick={() => setShowAddStudent(true)}
+                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-blue-500 text-white text-sm font-semibold shadow-sm hover:bg-blue-600 transition"
+              >
+                + Добавить ученика
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Two cards row: Today's lessons | Reports */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+          {/* Today's lessons */}
+          <div className="bg-white/70 backdrop-blur-xl border border-white/60 rounded-3xl p-5"
+               style={{ boxShadow: '0 35px 90px -45px rgba(0,0,0,0.30)' }}>
+            <h3 className="text-sm font-semibold text-slate-700 mb-3 mt-0 flex items-center gap-2">
+              <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-blue-100 text-blue-600 text-base">📖</span>
+              Уроки сегодня
+            </h3>
+            {todaySlots.length === 0 ? (
+              <p className="text-slate-400 text-sm italic">Нет уроков</p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {todaySlots.map((slot) => {
+                  const isCompleted = !!slotCompleted[slot.id];
+                  const hw = slotHw[slot.id] || 'none';
+                  return (
+                    <li key={slot.id} className={`flex items-center justify-between rounded-lg px-2 py-1.5 transition ${isCompleted ? 'bg-emerald-50' : ''}`}>
+                      {/* time + name — left */}
+                      <span className={`text-sm font-medium ${isCompleted ? 'text-slate-500 line-through' : 'text-slate-700'}`}>
+                        {formatTime(slot.time)} – {slot.studentName || 'Ученик'}
+                      </span>
+                      {/* controls — right */}
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {/* ДЗ toggle */}
+                        <button
+                          type="button"
+                          onClick={() => toggleHw(slot.id)}
+                          className={`text-xs font-semibold px-1.5 py-0.5 rounded transition ${
+                            hw === 'none'
+                              ? 'bg-slate-100 text-slate-400 hover:text-slate-600'
+                              : hw === 'assigned'
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-emerald-100 text-emerald-700'
+                          }`}
+                        >
+                          {hw === 'none' ? 'ДЗ' : hw === 'assigned' ? 'задано' : 'проверено'}
+                        </button>
+                        {/* Прошел checkbox */}
+                        <button
+                          type="button"
+                          onClick={() => toggleCompleted(slot.id)}
+                          className={`w-5 h-5 rounded border-2 flex items-center justify-center transition ${
+                            isCompleted
+                              ? 'bg-emerald-500 border-emerald-500'
+                              : 'bg-white border-slate-300 hover:border-emerald-400'
+                          }`}
+                        >
+                          {isCompleted && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+
+          {/* Reports */}
+          <div className="bg-white/70 backdrop-blur-xl border border-white/60 rounded-3xl p-5"
+               style={{ boxShadow: '0 35px 90px -45px rgba(0,0,0,0.30)' }}>
+            <h3 className="text-sm font-semibold text-slate-700 mb-3 mt-0 flex items-center gap-2">
+              <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-emerald-100 text-emerald-600 text-base">👥</span>
+              Отчёты
+            </h3>
+            <ul className="flex flex-col gap-2.5">
+              <li className="flex items-center justify-between">
+                <span className="flex items-center gap-2 text-sm text-slate-600">
+                  <span className="inline-block w-2.5 h-2.5 rounded-full bg-amber-400" />
+                  Пропустили сегодня
+                </span>
+                <span className="text-sm font-semibold text-slate-700">{missedToday}</span>
+              </li>
+              <li className="flex items-center justify-between">
+                <span className="flex items-center gap-2 text-sm text-slate-600">
+                  <span className="inline-block w-2.5 h-2.5 rounded-full bg-blue-400" />
+                  Больны
+                </span>
+                <span className="text-sm font-semibold text-slate-700">0</span>
+              </li>
+              <li className="flex items-center justify-between">
+                <span className="flex items-center gap-2 text-sm text-slate-600">
+                  <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400" />
+                  ДЗ не проверено
+                </span>
+                <span className="text-sm font-semibold text-slate-700">{homeworkNotChecked}</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        {/* Today's schedule (time – student | topic) */}
+        <div className="bg-white/70 backdrop-blur-xl border border-white/60 rounded-3xl p-5"
+             style={{ boxShadow: '0 35px 90px -45px rgba(0,0,0,0.30)' }}>
+          <h3 className="text-sm font-semibold text-slate-700 mb-3 mt-0">Расписание сегодня</h3>
+          {todaySlots.length === 0 ? (
+            <p className="text-slate-400 text-sm italic">Нет уроков на сегодня</p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {todaySlots.map((slot) => {
+                const cl = (slot.completedLessons || []).find(c => c.weekStart === weekStart);
+                const isPaid = cl?.paid;
+
+                // Match lessons for this slot using flexible name matching
+                const matched = findLessonsForSlot(allLessons, slot);
+
+                // topic — из сегодняшнего урока (план на сегодня)
+                const todayDot = isoToDotDate(todayISO());
+                const todayLesson = matched.find(l => l.date === todayDot);
+                const topic = todayLesson?.topic;
+
+                // homework — из предыдущего урока (ДЗ для проверки сегодня)
+                const prevLesson = matched
+                  .filter(l => dotDateToISO(l.date) < todayISO())
+                  .sort((a, b) => dotDateToISO(b.date).localeCompare(dotDateToISO(a.date)))[0];
+                const hw = prevLesson?.homework;
+
+                return (
+                  <li key={slot.id} className="flex items-start justify-between border-b border-slate-100 pb-2">
+                    {/* left: время + имя + оплата */}
+                    <div className="flex flex-col gap-0.5 flex-shrink-0">
+                      <span className="text-sm font-semibold text-slate-800 whitespace-nowrap">
+                        {formatTime(slot.time)} – {slot.studentName || 'Ученик'}
+                      </span>
+                      {isPaid && (
+                        <span className="text-xs text-emerald-600 font-medium">Оплачено</span>
+                      )}
+                    </div>
+                    {/* right: тема + ДЗ из предыдущего урока */}
+                    <div className="flex flex-col gap-0.5 items-end flex-1 pl-4">
+                      {topic && (
+                        <span className="text-sm text-slate-700 text-right">{topic}</span>
+                      )}
+                      {hw && (
+                        <span className="text-xs text-amber-700 bg-amber-50 rounded px-1.5 py-0.5">ДЗ ({prevLesson?.date}): {hw}</span>
+                      )}
+                      {!topic && !hw && (
+                        <span className="text-xs text-slate-400 italic">План не указан</span>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </div>
+
+      {/* ── RIGHT sidebar ─────────────────────────────────── */}
+      <div className="flex flex-col gap-4">
+
+        {/* Quick Actions */}
+        <div className="bg-white/70 backdrop-blur-xl border border-white/60 rounded-3xl p-5"
+             style={{ boxShadow: '0 35px 90px -45px rgba(0,0,0,0.30)' }}>
+          <h3 className="text-sm font-semibold text-slate-700 mb-3 mt-0">Быстрые действия</h3>
+          <div className="grid grid-cols-2 gap-2.5">
+            <button onClick={() => setShowAddStudent(true)} className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold hover:bg-blue-100 transition">
+              <span className="inline-flex items-center justify-center w-5 h-5 rounded-lg bg-blue-500 text-white text-xs">+</span>
+              Ученик
+            </button>
+            <button className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold hover:bg-emerald-100 transition">
+              <span className="inline-flex items-center justify-center w-5 h-5 rounded-lg bg-emerald-500 text-white text-xs">+</span>
+              Урок
+            </button>
+            <button className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold hover:bg-amber-100 transition">
+              <span className="inline-flex items-center justify-center w-5 h-5 rounded-lg bg-amber-500 text-white text-xs">📊</span>
+              Отчёты
+            </button>
+          </div>
+        </div>
+
+        {/* Active students */}
+        <div className="bg-white/70 backdrop-blur-xl border border-white/60 rounded-3xl p-5"
+             style={{ boxShadow: '0 35px 90px -45px rgba(0,0,0,0.30)' }}>
+          <h3 className="text-sm font-semibold text-slate-700 mb-3 mt-0">Активные ученики</h3>
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-xl">
+              👤
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-slate-800">{students.length}</div>
+              <div className="text-xs text-slate-400">Активных учеников</div>
+            </div>
+          </div>
+          {/* mini bar */}
+          <div className="mt-3 h-2 rounded-full bg-slate-100 overflow-hidden">
+            <div className="h-full rounded-full bg-gradient-to-r from-blue-400 to-indigo-500" style={{ width: '65%' }} />
+          </div>
+        </div>
+      </div>
+
+      {/* Add Student Modal */}
+      <AddStudentModal
+        isOpen={showAddStudent}
+        onClose={() => setShowAddStudent(false)}
+        onStudentAdded={loadAll}
+        groups={groups}
+      />
+    </div>
+  );
+};
+
+export default ManagementDashboard;

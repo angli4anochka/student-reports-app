@@ -1,0 +1,475 @@
+import express from 'express';
+import { PrismaClient } from '@prisma/client';
+import { randomUUID } from 'crypto';
+import { authenticateToken, AuthRequest } from '../middleware/auth';
+import { sendHomeworkToStudent, sendHomeworkToGroup } from '../services/telegram-bot';
+
+const router = express.Router();
+const prisma = new PrismaClient();
+
+// GET /lessons - list lessons with filters
+router.get('/', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const userId = (req as any).user?.userId;
+    const { groupId, studentId } = req.query;
+
+    // Получаем данные пользователя для проверки организации
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { organizationId: true, role: true }
+    });
+
+    if (!currentUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    let lessons;
+    if (studentId) {
+      // Уроки для конкретного студента
+      if (currentUser.organizationId) {
+        // Пользователь в организации - любые уроки студентов организации
+        lessons = await prisma.$queryRaw`
+          SELECT l.*,
+                 CASE WHEN g.id IS NOT NULL THEN jsonb_build_object('id', g.id, 'name', g.name, 'description', g.description) ELSE NULL END as group,
+                 CASE WHEN st.id IS NOT NULL THEN jsonb_build_object('id', st.id, 'fullName', st."fullName") ELSE NULL END as student
+          FROM lessons l
+          LEFT JOIN groups g ON l."groupId" = g.id
+          LEFT JOIN students st ON l."studentId" = st.id
+          WHERE l."studentId" = ${studentId}
+            AND l."organizationId" = ${currentUser.organizationId}
+          ORDER BY l.date DESC
+        `;
+      } else {
+        // Индивидуальный репетитор - только свои уроки
+        lessons = await prisma.$queryRaw`
+          SELECT l.*,
+                 CASE WHEN g.id IS NOT NULL THEN jsonb_build_object('id', g.id, 'name', g.name, 'description', g.description) ELSE NULL END as group,
+                 CASE WHEN st.id IS NOT NULL THEN jsonb_build_object('id', st.id, 'fullName', st."fullName") ELSE NULL END as student
+          FROM lessons l
+          LEFT JOIN groups g ON l."groupId" = g.id
+          LEFT JOIN students st ON l."studentId" = st.id
+          WHERE l."teacherId" = ${userId} AND l."studentId" = ${studentId}
+          ORDER BY l.date DESC
+        `;
+      }
+    } else if (groupId) {
+      // Уроки для конкретной группы
+      if (currentUser.organizationId) {
+        // Пользователь в организации - любые уроки групп организации
+        lessons = await prisma.$queryRaw`
+          SELECT l.*,
+                 CASE WHEN g.id IS NOT NULL THEN jsonb_build_object('id', g.id, 'name', g.name, 'description', g.description) ELSE NULL END as group,
+                 CASE WHEN st.id IS NOT NULL THEN jsonb_build_object('id', st.id, 'fullName', st."fullName") ELSE NULL END as student
+          FROM lessons l
+          LEFT JOIN groups g ON l."groupId" = g.id
+          LEFT JOIN students st ON l."studentId" = st.id
+          WHERE l."groupId" = ${groupId}
+            AND l."organizationId" = ${currentUser.organizationId}
+          ORDER BY l.date DESC
+        `;
+      } else {
+        // Индивидуальный репетитор - только уроки групп с доступом
+        lessons = await prisma.$queryRaw`
+          SELECT l.*,
+                 CASE WHEN g.id IS NOT NULL THEN jsonb_build_object('id', g.id, 'name', g.name, 'description', g.description) ELSE NULL END as group,
+                 CASE WHEN st.id IS NOT NULL THEN jsonb_build_object('id', st.id, 'fullName', st."fullName") ELSE NULL END as student
+          FROM lessons l
+          LEFT JOIN groups g ON l."groupId" = g.id
+          LEFT JOIN students st ON l."studentId" = st.id
+          WHERE l."groupId" = ${groupId}
+            AND (l."teacherId" = ${userId} OR l."groupId" IN (
+              SELECT "groupId" FROM group_teachers WHERE "teacher_id" = ${userId}
+            ))
+          ORDER BY l.date DESC
+        `;
+      }
+    } else {
+      // Все уроки
+      if (currentUser.organizationId) {
+        // ADMIN/SCHOOL_MANAGER видят только уроки Вероники и Валерии
+        if (currentUser.role === 'ADMIN' || currentUser.role === 'SCHOOL_MANAGER') {
+          const targetTeachers = await prisma.user.findMany({
+            where: {
+              email: { in: ['Kljvveronika@rambler.ru', 'lera.dagldiyan@mail.ru'] }
+            },
+            select: { id: true }
+          });
+          const teacherIds = targetTeachers.map(t => t.id);
+
+          lessons = await prisma.lesson.findMany({
+            where: {
+              teacherId: { in: teacherIds }
+            },
+            include: {
+              group: { select: { id: true, name: true, description: true } },
+              student: { select: { id: true, fullName: true } }
+            },
+            orderBy: { date: 'desc' }
+          });
+        } else {
+          // Обычные учителя - все уроки организации
+          lessons = await prisma.$queryRaw`
+            SELECT l.*,
+                   CASE WHEN g.id IS NOT NULL THEN jsonb_build_object('id', g.id, 'name', g.name, 'description', g.description) ELSE NULL END as group,
+                   CASE WHEN st.id IS NOT NULL THEN jsonb_build_object('id', st.id, 'fullName', st."fullName") ELSE NULL END as student
+            FROM lessons l
+            LEFT JOIN groups g ON l."groupId" = g.id
+            LEFT JOIN students st ON l."studentId" = st.id
+            WHERE l."organizationId"::text = ${currentUser.organizationId}
+            ORDER BY l.date DESC
+          `;
+        }
+      } else {
+        // Индивидуальный репетитор - свои уроки + shared groups
+        lessons = await prisma.$queryRaw`
+          SELECT l.*,
+                 CASE WHEN g.id IS NOT NULL THEN jsonb_build_object('id', g.id, 'name', g.name, 'description', g.description) ELSE NULL END as group,
+                 CASE WHEN st.id IS NOT NULL THEN jsonb_build_object('id', st.id, 'fullName', st."fullName") ELSE NULL END as student
+          FROM lessons l
+          LEFT JOIN groups g ON l."groupId" = g.id
+          LEFT JOIN students st ON l."studentId" = st.id
+          WHERE l."teacherId" = ${userId}
+             OR l."groupId" IN (
+               SELECT DISTINCT "groupId" FROM personal_schedule_slots
+               WHERE "teacherId" = ${userId} AND "groupId" IS NOT NULL
+             )
+          ORDER BY l.date DESC
+        `;
+      }
+    }
+
+    return res.json(lessons);
+  } catch (error) {
+    console.error('Lessons fetch error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /lessons/:id - get single lesson
+router.get('/:id', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user!.userId;
+
+    // Получаем данные пользователя для проверки организации
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { organizationId: true, role: true }
+    });
+
+    if (!currentUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Проверяем доступ
+    let lessonCheck;
+    if (currentUser.organizationId) {
+      if (currentUser.role === 'ADMIN' || currentUser.role === 'SCHOOL_MANAGER') {
+        // ADMIN видит только уроки Вероники и Валерии
+        const targetTeachers = await prisma.user.findMany({
+          where: {
+            email: { in: ['Kljvveronika@rambler.ru', 'lera.dagldiyan@mail.ru'] }
+          },
+          select: { id: true }
+        });
+        const teacherIds = targetTeachers.map(t => t.id);
+
+        lessonCheck = await prisma.lesson.findFirst({
+          where: {
+            id,
+            teacherId: { in: teacherIds }
+          }
+        });
+      } else {
+        // Учителя видят: свои + расшаренные + общих студентов школы
+        lessonCheck = await prisma.lesson.findFirst({
+          where: {
+            id,
+            OR: [
+              { teacherId: userId },
+              { group: { collaborators: { some: { teacherId: userId } } } },
+              { student: { sharedTeachers: { some: { teacherId: userId } } } },
+              { student: { organizationId: currentUser.organizationId, isPersonal: false } }
+            ]
+          }
+        });
+      }
+    } else {
+      // Индивидуальный репетитор - только свои уроки или shared
+      lessonCheck = await prisma.lesson.findFirst({
+        where: {
+          id,
+          OR: [
+            { teacherId: userId },
+            { group: { collaborators: { some: { teacherId: userId } } } },
+            { student: { sharedTeachers: { some: { teacherId: userId } } } }
+          ]
+        }
+      });
+    }
+
+    if (!lessonCheck) {
+      return res.status(404).json({ error: 'Lesson not found' });
+    }
+
+    const lesson = await prisma.$queryRaw`
+      SELECT l.*,
+             CASE WHEN g.id IS NOT NULL THEN jsonb_build_object('id', g.id, 'name', g.name, 'description', g.description) ELSE NULL END as group,
+             CASE WHEN st.id IS NOT NULL THEN jsonb_build_object('id', st.id, 'fullName', st."fullName") ELSE NULL END as student
+      FROM lessons l
+      LEFT JOIN groups g ON l."groupId" = g.id
+      LEFT JOIN students st ON l."studentId" = st.id
+      WHERE l.id = ${id}
+    `;
+
+    if (!lesson || (lesson as any[]).length === 0) {
+      return res.status(404).json({ error: 'Lesson not found' });
+    }
+
+    return res.json((lesson as any[])[0]);
+  } catch (error) {
+    console.error('Lesson fetch error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /lessons - create lesson
+router.post('/', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const userId = (req as any).user?.userId;
+    const { date, topic, homework, comment, groupId, studentId, time, notificationDate, lessonPlan, scheduleSlotId } = req.body;
+
+    if (!date || !topic) {
+      return res.status(400).json({ error: 'Date and topic are required' });
+    }
+
+    const lessonId = randomUUID();
+    const finalGroupId = groupId && groupId !== '' ? groupId : null;
+    const finalStudentId = studentId && studentId !== '' ? studentId : null;
+    const finalSlotId = scheduleSlotId && scheduleSlotId !== '' ? scheduleSlotId : null;
+
+    await prisma.$executeRaw`
+      INSERT INTO lessons (id, date, topic, homework, comment, "teacherId", "groupId", "studentId", "scheduleSlotId", "createdAt", "updatedAt")
+      VALUES (${lessonId}, ${date}, ${topic}, ${homework || ''}, ${comment || ''}, ${userId}, ${finalGroupId}, ${finalStudentId}, ${finalSlotId}, NOW(), NOW())
+    `;
+
+    const lesson = await prisma.$queryRaw`
+      SELECT l.*,
+             CASE WHEN g.id IS NOT NULL THEN jsonb_build_object('id', g.id, 'name', g.name, 'description', g.description) ELSE NULL END as group,
+             CASE WHEN st.id IS NOT NULL THEN jsonb_build_object('id', st.id, 'fullName', st."fullName") ELSE NULL END as student
+      FROM lessons l
+      LEFT JOIN groups g ON l."groupId" = g.id
+      LEFT JOIN students st ON l."studentId" = st.id
+      WHERE l.id = ${lessonId}
+    `;
+
+    // Автоотправка в Telegram отключена
+    // Используйте /api/telegram/send для ручной отправки ДЗ
+    // if (homework && homework.trim() !== '') {
+    //   const homeworkData = {
+    //     date,
+    //     topic,
+    //     homework
+    //   };
+    //
+    //   // Отправить индивидуальному студенту
+    //   if (finalStudentId) {
+    //     sendHomeworkToStudent(finalStudentId, homeworkData).catch(err => {
+    //       console.error('Error sending homework to student via Telegram:', err);
+    //     });
+    //   }
+    //
+    //   // Отправить группе
+    //   if (finalGroupId) {
+    //     sendHomeworkToGroup(finalGroupId, homeworkData).catch(err => {
+    //       console.error('Error sending homework to group via Telegram:', err);
+    //     });
+    //   }
+    // }
+
+    return res.status(201).json((lesson as any[])[0]);
+  } catch (error) {
+    console.error('Lesson create error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /lessons/:id - update lesson
+router.put('/:id', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const { date, topic, homework, comment, groupId, studentId, time, notificationDate, lessonPlan } = req.body;
+    const userId = req.user!.userId;
+    const finalGroupId = groupId && groupId !== '' ? groupId : null;
+    const finalStudentId = studentId && studentId !== '' ? studentId : null;
+
+    // Получаем данные пользователя для проверки организации
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { organizationId: true, role: true }
+    });
+
+    if (!currentUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Проверяем права доступа к уроку
+    let lessonCheck;
+    if (currentUser.organizationId) {
+      if (currentUser.role === 'ADMIN' || currentUser.role === 'SCHOOL_MANAGER') {
+        // ADMIN может редактировать только уроки Вероники и Валерии
+        const targetTeachers = await prisma.user.findMany({
+          where: {
+            email: { in: ['Kljvveronika@rambler.ru', 'lera.dagldiyan@mail.ru'] }
+          },
+          select: { id: true }
+        });
+        const teacherIds = targetTeachers.map(t => t.id);
+
+        lessonCheck = await prisma.lesson.findFirst({
+          where: {
+            id,
+            teacherId: { in: teacherIds }
+          }
+        });
+      } else {
+        // Обычные учителя - любые уроки организации
+        lessonCheck = await prisma.lesson.findFirst({
+          where: {
+            id,
+            organizationId: currentUser.organizationId
+          }
+        });
+      }
+    } else {
+      // Индивидуальный репетитор - только свои уроки или shared
+      lessonCheck = await prisma.lesson.findFirst({
+        where: {
+          id,
+          OR: [
+            { teacherId: userId },
+            { group: { collaborators: { some: { teacherId: userId } } } },
+            { student: { sharedTeachers: { some: { teacherId: userId } } } }
+          ]
+        }
+      });
+    }
+
+    if (!lessonCheck) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Используем Prisma update вместо raw SQL для правильной обработки undefined полей
+    const updateData: any = {
+      updatedAt: new Date()
+    };
+
+    if (date !== undefined) updateData.date = date;
+    if (topic !== undefined) updateData.topic = topic;
+    if (homework !== undefined) updateData.homework = homework;
+    if (comment !== undefined) updateData.comment = comment;
+    if (time !== undefined) updateData.time = time;
+    if (notificationDate !== undefined) updateData.notificationDate = notificationDate;
+    if (lessonPlan !== undefined) updateData.lessonPlan = lessonPlan;
+    if (finalGroupId !== undefined) updateData.groupId = finalGroupId;
+    if (finalStudentId !== undefined) updateData.studentId = finalStudentId;
+
+    await prisma.lesson.update({
+      where: { id },
+      data: updateData
+    });
+
+    const lesson = await prisma.$queryRaw<any[]>`
+      SELECT l.*,
+             CASE WHEN g.id IS NOT NULL THEN jsonb_build_object('id', g.id, 'name', g.name, 'description', g.description) ELSE NULL END as group,
+             CASE WHEN st.id IS NOT NULL THEN jsonb_build_object('id', st.id, 'fullName', st."fullName") ELSE NULL END as student
+      FROM lessons l
+      LEFT JOIN groups g ON l."groupId" = g.id
+      LEFT JOIN students st ON l."studentId" = st.id
+      WHERE l.id = ${id}
+    `;
+
+    const updatedLesson = lesson[0];
+
+    // Автоотправка в Telegram отключена
+    // Используйте /api/telegram/send для ручной отправки ДЗ
+    // if (homework && homework.trim() !== '') {
+    //   const homeworkData = {
+    //     date: date || updatedLesson.date,
+    //     topic: topic || updatedLesson.topic,
+    //     homework
+    //   };
+    //
+    //   // Используем studentId/groupId из обновленного урока, если они не были переданы в запросе
+    //   const targetStudentId = finalStudentId !== undefined ? finalStudentId : updatedLesson.studentId;
+    //   const targetGroupId = finalGroupId !== undefined ? finalGroupId : updatedLesson.groupId;
+    //
+    //   // Отправить индивидуальному студенту
+    //   if (targetStudentId) {
+    //     sendHomeworkToStudent(targetStudentId, homeworkData).catch(err => {
+    //       console.error('Error sending homework to student via Telegram:', err);
+    //     });
+    //   }
+    //
+    //   // Отправить группе
+    //   if (targetGroupId) {
+    //     sendHomeworkToGroup(targetGroupId, homeworkData).catch(err => {
+    //       console.error('Error sending homework to group via Telegram:', err);
+    //     });
+    //   }
+    // }
+
+    return res.json((lesson as any[])[0]);
+  } catch (error) {
+    console.error('Lesson update error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /lessons/:id - delete lesson
+router.delete('/:id', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user!.userId;
+
+    // Получаем данные пользователя для проверки прав
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { organizationId: true, role: true }
+    });
+
+    if (!currentUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Получаем урок для проверки прав доступа
+    const lesson = await prisma.lesson.findUnique({
+      where: { id }
+    });
+
+    if (!lesson) {
+      return res.status(404).json({ error: 'Lesson not found' });
+    }
+
+    // Проверяем права доступа:
+    // 1. Админы могут удалять любые уроки
+    // 2. Пользователи в организации могут удалять уроки своей организации
+    // 3. Индивидуальные репетиторы могут удалять только свои уроки
+    const canDelete =
+      currentUser.role === 'ADMIN' ||
+      (currentUser.organizationId && lesson.organizationId === currentUser.organizationId) ||
+      lesson.teacherId === userId;
+
+    if (!canDelete) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    await prisma.$executeRaw`DELETE FROM lessons WHERE id = ${id}`;
+    return res.status(204).end();
+  } catch (error) {
+    console.error('Lesson delete error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+export default router;

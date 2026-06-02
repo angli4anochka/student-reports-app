@@ -1,0 +1,664 @@
+// Prisma schema for Supabase PostgreSQL
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Организации (школы)
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  type      String   @default("SCHOOL") // SCHOOL | INDIVIDUAL
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users     User[]
+  students  Student[]
+  groups    Group[]
+  lessons   Lesson[]
+
+  // Subscription fields
+  subscriptions   Subscription[]
+  usageTracking   UsageTracking[]
+
+  @@map("organizations")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  fullName  String
+  role      Role     @default(TEACHER)
+
+  // Организация (школа). Null = индивидуальный репетитор
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  school    String?  // DEPRECATED: будет удалено после миграции
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  students         Student[]
+  years            Year[]
+  groups           Group[]
+  sharedGroups     GroupTeacher[] // Groups where this user is a collaborator
+  sharedStudents   StudentTeacher[] @relation("sharedStudents") // Students where this user is a collaborator
+  attendance       Attendance[]
+  lessons          Lesson[]
+  teacherSchedules TeacherSchedule[]
+  lessonTypes      LessonType[] // For Teacher Earnings feature
+  scheduleSlots    PersonalScheduleSlot[] // For Teacher Earnings feature
+  glassesGroups    GlassesGroup[] // Groups for Points & Badges feature
+  teacherNotes     TeacherNotes? // Personal notes for teacher
+  payments         Payment[] // Payment records received by this teacher
+  scheduleReminders StudentScheduleReminder[] @relation("scheduleReminders") // Schedule reminders created by this teacher
+
+  // Subscription fields
+  subscriptions    Subscription[]
+  usageTracking    UsageTracking[]
+  currentSubscriptionId String? @map("current_subscription_id")
+  subscriptionStatus String? @default("FREE") @map("subscription_status")
+  trialUsed        Boolean @default(false) @map("trial_used")
+
+  @@index([email])
+  @@index([role])
+  @@index([organizationId])
+  @@index([school])
+  @@index([currentSubscriptionId])
+  @@map("users")
+}
+
+model Group {
+  id          String @id @default(uuid())
+  name        String
+  description String?
+
+  teacherId String // Owner/creator of the group
+  teacher   User   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  // Организация (для изоляции данных между школами)
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  collaborators           GroupTeacher[]          // Other teachers who have access to this group
+  students                Student[]
+  attendance              Attendance[]
+  lessons                 Lesson[]
+  scheduleSettings        GroupScheduleSettings?
+  personalScheduleSlots   PersonalScheduleSlot[]  // Schedule slots for this group in Teacher Earnings
+  customCompletedLessons  CompletedLesson[] @relation("CustomGroup") // Custom completed lessons
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name, teacherId])
+  @@index([teacherId])
+  @@index([organizationId])
+  @@index([name])
+  @@map("groups")
+}
+
+// Junction table for many-to-many relationship between teachers and groups
+model GroupTeacher {
+  id        String @id @default(uuid())
+  groupId   String @map("group_id")
+  teacherId String @map("teacher_id")
+
+  group   Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  teacher User  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([groupId, teacherId]) // Prevent duplicate entries
+  @@index([groupId])
+  @@index([teacherId])
+  @@map("group_teachers")
+}
+
+model Student {
+  id       String @id @default(uuid())
+  fullName String
+  notes    String?
+
+  teacherId String
+  teacher   User   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  groupId String?
+  group   Group? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+
+  // Организация (для изоляции данных между школами)
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Telegram integration
+  telegramChatId   String?
+  telegramUsername String?
+
+  // Personal student flag - if true, visible only to owner teacher (not shared, not to admins)
+  isPersonal Boolean @default(false)
+
+  // Prepaid lessons balance system
+  lessonsBalance          Int?      @default(0)
+  lessonsBalanceUpdatedAt DateTime?
+
+  grades               Grade[]
+  attendance           Attendance[]
+  lessons              Lesson[]
+  sharedTeachers       StudentTeacher[]         // Teachers who have access to this student
+  personalScheduleSlots PersonalScheduleSlot[]  // Schedule slots for this student in Teacher Earnings
+  customCompletedLessons CompletedLesson[] @relation("CustomStudent") // Custom completed lessons
+  payments              Payment[]            // Payment records for prepaid lessons
+  scheduleReminders     StudentScheduleReminder[] // Schedule reminders for Telegram
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([teacherId])
+  @@index([groupId])
+  @@index([organizationId])
+  @@index([teacherId, groupId])
+  @@index([fullName])
+  @@index([telegramChatId])
+  @@map("students")
+}
+
+// Junction table for many-to-many relationship between teachers and students
+model StudentTeacher {
+  id        String @id @default(uuid())
+  studentId String @map("student_id")
+  teacherId String @map("teacher_id")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacher User    @relation("sharedStudents", fields: [teacherId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([studentId, teacherId]) // Prevent duplicate entries
+  @@index([studentId])
+  @@index([teacherId])
+  @@map("student_teachers")
+}
+
+// Prepaid lessons payment system
+model Payment {
+  id             String   @id @default(uuid())
+  studentId      String
+  teacherId      String
+  amount         Decimal  @db.Decimal(10, 2)
+  lessonsCount   Int
+  pricePerLesson Decimal  @db.Decimal(10, 2)
+  paymentDate    DateTime @db.Date
+  notes          String?
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacher User    @relation(fields: [teacherId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([studentId])
+  @@index([paymentDate])
+  @@map("payments")
+}
+
+model Year {
+  id     String @id @default(uuid())
+  year   String
+  months String // JSON string of month names
+
+  createdBy String
+  teacher   User   @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([createdBy])
+  @@index([year])
+  @@map("years")
+}
+
+model Criterion {
+  id     String @id @default(uuid())
+  name   String
+  weight Float  // Weight in final grade (0.0-1.0)
+  scale  String // Scale description like "0-5" or "1-10"
+  order  Int    @default(0) // Display order
+
+  grades CriterionGrade[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([order])
+  @@map("criteria")
+}
+
+model Grade {
+  id            String @id @default(uuid())
+  studentId     String
+  yearId        String?
+  month         String
+  attendance    Float? // Attendance percentage
+  homework      String?
+  comment       String? // General comment
+  recommendations String? // Recommendations for improvement
+  totalScore    Float? // Calculated total score
+  grade         String? // Letter grade (A, B, C, etc.)
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  criteriaGrades CriterionGrade[]
+  attachments    Attachment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([studentId, month])
+  @@index([studentId])
+  @@index([yearId])
+  @@index([month])
+  @@index([studentId, yearId])
+  @@index([yearId, month])
+  @@index([createdAt])
+  @@map("grades")
+}
+
+model CriterionGrade {
+  id          String @id @default(uuid())
+  gradeId     String
+  criterionId String
+  value       Float // The actual grade value
+
+  grade     Grade     @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+  criterion Criterion @relation(fields: [criterionId], references: [id], onDelete: Cascade)
+
+  @@unique([gradeId, criterionId])
+  @@index([gradeId])
+  @@index([criterionId])
+  @@map("criterion_grades")
+}
+
+model Attachment {
+  id      String @id @default(uuid())
+  gradeId String
+  name    String
+  url     String
+  type    String // File type/extension
+
+  grade Grade @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([gradeId])
+  @@map("attachments")
+}
+
+model GradeScale {
+  id          String @id @default(uuid())
+  letter      String // A, B, C, etc.
+  minScore    Float
+  description String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("grade_scales")
+}
+
+model Attendance {
+  id        String @id @default(uuid())
+  studentId String
+  date      String // Date format: DD.MM.YYYY
+  status    String // PRESENT, ABSENT, LATE
+  teacherId String
+  groupId   String?
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacher User    @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  group   Group?  @relation(fields: [groupId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([studentId, date])
+  @@index([studentId])
+  @@index([date])
+  @@index([teacherId])
+  @@index([groupId])
+  @@map("attendance")
+}
+
+model Lesson {
+  id               String  @id @default(uuid())
+  date             String
+  topic            String
+  homework         String?
+  comment          String?
+  lessonPlan       String? @map("lesson_plan") // Lesson structure with reminders
+  time             String? // Lesson time (HH:MM format)
+  notificationDate String? @map("notification_date") // Notification date (DD.MM format)
+  teacherId        String
+  groupId          String?
+  studentId        String?
+  scheduleSlotId   String? // Link to schedule slot
+
+  teacher User     @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  group   Group?   @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  student Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
+
+  // Организация (для изоляции данных между школами)
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([teacherId])
+  @@index([groupId])
+  @@index([studentId])
+  @@index([organizationId])
+  @@index([date])
+  @@map("lessons")
+}
+
+model GroupScheduleSettings {
+  id       String @id @default(uuid())
+  groupId  String @unique
+  weekdays String // Comma-separated weekday numbers (0-6)
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([groupId])
+  @@map("group_schedule_settings")
+}
+
+model TeacherSchedule {
+  id        String @id @default(uuid())
+  teacherId String
+  day       Int // 0-4 for Mon-Fri
+  time      String // Time slot like "11", "12", etc.
+  groupName String // Name of the group/class
+  color     String @default("#FFD700") // Cell background color
+
+  teacher User @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([teacherId, day, time])
+  @@index([teacherId])
+  @@map("teacher_schedules")
+}
+
+enum Role {
+  TEACHER
+  SCHOOL_MANAGER  // Менеджер школы - видит все данные организации
+  ADMIN           // Системный администратор
+}
+
+// Models for "Teacher Earnings" feature
+model LessonType {
+  id           String   @id @default(uuid())
+  name         String
+  color        String
+  pricePerHour Float
+  teacherId    String
+
+  teacher              User                     @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  scheduleSlots        PersonalScheduleSlot[]
+  customCompletedLessons CompletedLesson[] @relation("CustomLessonType")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("lesson_types")
+}
+
+model PersonalScheduleSlot {
+  id           String  @id @default(uuid())
+  dayOfWeek    Int
+  time         String
+  studentName  String? // Optional custom name (fallback if no student/group selected)
+  studentId    String? // Link to actual student
+  groupId      String? // Link to actual group
+  teacherId    String
+  lessonTypeId String
+
+  teacher          User                @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  lessonType       LessonType          @relation(fields: [lessonTypeId], references: [id], onDelete: Cascade)
+  student          Student?            @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  group            Group?              @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  completedLessons CompletedLesson[]
+  overrides        ScheduleOverride[]  // Переопределения расписания для конкретных недель
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([teacherId, dayOfWeek, time])
+  @@index([studentId])
+  @@index([groupId])
+  @@map("personal_schedule_slots")
+}
+
+// Переопределения расписания для конкретных недель
+// Позволяет перемещать уроки на другие дни/время только для выбранной недели
+model ScheduleOverride {
+  id             String  @id @default(uuid())
+  scheduleSlotId String   // Ссылка на базовый слот расписания
+  weekStart      DateTime @db.Date  // Понедельник недели (YYYY-MM-DD)
+  newDayOfWeek   Int     // Новый день недели (0=Пн, 1=Вт, ..., 6=Вс)
+  newTime        String  // Новое время (HH:MM)
+  isActive       Boolean @default(true) // Можно временно отключить
+
+  scheduleSlot PersonalScheduleSlot @relation(fields: [scheduleSlotId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([scheduleSlotId, weekStart])
+  @@index([weekStart])
+  @@map("schedule_overrides")
+}
+
+model CompletedLesson {
+  id             String @id @default(uuid())
+  weekStart      String
+  completed      Boolean @default(false)
+  paid           Boolean @default(false)
+  scheduleSlotId String
+
+  // Custom fields for this specific week (override schedule slot defaults)
+  customPrice         Float?  // Custom price for this week
+  customStudentName   String? // Custom student name for this week (fallback text)
+  customStudentId     String? // Custom student link for this week
+  customGroupId       String? // Custom group link for this week
+  customLessonTypeId  String? // Custom lesson type for this week
+
+  scheduleSlot     PersonalScheduleSlot @relation(fields: [scheduleSlotId], references: [id], onDelete: Cascade)
+  customLessonType LessonType?          @relation("CustomLessonType", fields: [customLessonTypeId], references: [id], onDelete: SetNull)
+  customStudent    Student?             @relation("CustomStudent", fields: [customStudentId], references: [id], onDelete: SetNull)
+  customGroup      Group?               @relation("CustomGroup", fields: [customGroupId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([scheduleSlotId, weekStart])
+  @@index([customStudentId])
+  @@index([customGroupId])
+  @@map("completed_lessons")
+}
+
+// Models for "Glasses" (Points & Badges) feature
+model GlassesGroup {
+  id        String @id @default(uuid())
+  name      String
+  teacherId String
+
+  teacher  User             @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  students GlassesStudent[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([teacherId])
+  @@map("glasses_groups")
+}
+
+model GlassesStudent {
+  id       String @id @default(uuid())
+  fullName String
+  points   Int    @default(0)
+  groupId  String
+
+  group GlassesGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([groupId])
+  @@map("glasses_students")
+}
+
+// Teacher personal notes
+model TeacherNotes {
+  id        String @id @default(uuid())
+  teacherId String @unique
+  content   String @default("")
+
+  teacher User @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([teacherId])
+  @@map("teacher_notes")
+}
+// ==================== SUBSCRIPTION SYSTEM ====================
+
+model SubscriptionPlan {
+  id               String   @id @default(uuid())
+  name             String   @unique
+  price            Decimal  @db.Decimal(10, 2)
+  maxStudents      Int      @map("max_students")
+  maxGroups        Int      @map("max_groups")
+  maxTeachers      Int      @default(1) @map("max_teachers")
+  hasTelegram      Boolean  @default(false) @map("has_telegram")
+  hasExcelExport   Boolean  @default(false) @map("has_excel_export")
+  hasAnalytics     Boolean  @default(false) @map("has_analytics")
+  hasApiAccess     Boolean  @default(false) @map("has_api_access")
+  historyMonths    Int      @default(3) @map("history_months")
+  description      String?
+  
+  subscriptions    Subscription[]
+  
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+  
+  @@map("subscription_plans")
+}
+
+model Subscription {
+  id               String   @id @default(uuid())
+  userId           String   @map("user_id")
+  organizationId   String?  @map("organization_id")
+  planId           String   @map("plan_id")
+  status           String   @default("TRIAL") // TRIAL, ACTIVE, CANCELLED, EXPIRED, SUSPENDED
+  startDate        DateTime @map("start_date")
+  endDate          DateTime @map("end_date")
+  trialEndDate     DateTime? @map("trial_end_date")
+  autoRenew        Boolean  @default(true) @map("auto_renew")
+  paymentMethod    String?  @map("payment_method")
+  lastPaymentId    String?  @map("last_payment_id")
+  cancelReason     String?  @map("cancel_reason")
+  
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization     Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan             SubscriptionPlan @relation(fields: [planId], references: [id])
+  payments         SubscriptionPayment[]
+  
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+  
+  @@index([userId])
+  @@index([status])
+  @@index([endDate])
+  @@map("subscriptions")
+}
+
+model SubscriptionPayment {
+  id                 String   @id @default(uuid())
+  subscriptionId     String   @map("subscription_id")
+  amount             Decimal  @db.Decimal(10, 2)
+  currency           String   @default("RUB")
+  status             String   // PENDING, SUCCESS, FAILED, REFUNDED
+  paymentProvider    String?  @map("payment_provider")
+  providerPaymentId  String?  @map("provider_payment_id")
+  paymentDate        DateTime @map("payment_date")
+  nextPaymentDate    DateTime? @map("next_payment_date")
+  receiptUrl         String?  @map("receipt_url")
+  errorMessage       String?  @map("error_message")
+  metadata           Json?
+  
+  subscription       Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  
+  createdAt          DateTime @default(now()) @map("created_at")
+  
+  @@index([subscriptionId])
+  @@index([status])
+  @@map("subscription_payments")
+}
+
+model UsageTracking {
+  id                   String   @id @default(uuid())
+  userId               String   @map("user_id")
+  organizationId       String?  @map("organization_id")
+  trackedDate          DateTime @default(now()) @map("tracked_date") @db.Date
+  studentsCount        Int      @default(0) @map("students_count")
+  groupsCount          Int      @default(0) @map("groups_count")
+  teachersCount        Int      @default(0) @map("teachers_count")
+  excelExportsCount    Int      @default(0) @map("excel_exports_count")
+  telegramMessagesCount Int     @default(0) @map("telegram_messages_count")
+  apiCallsCount        Int      @default(0) @map("api_calls_count")
+  
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization         Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+  
+  @@unique([userId, trackedDate])
+  @@index([userId, trackedDate])
+  @@map("usage_tracking")
+}
+
+// Student schedule reminders for Telegram notifications
+// Separate table to avoid conflicts with homework/lesson data
+model StudentScheduleReminder {
+  id          String   @id @default(uuid())
+  studentId   String   @map("student_id")
+  dayOfWeek   Int      // 0-6 (Monday-Sunday)
+  time        String   // Format "HH:MM"
+  teacherId   String   @map("teacher_id")
+  enabled     Boolean  @default(true)
+
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacher     User     @relation("scheduleReminders", fields: [teacherId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@unique([studentId, dayOfWeek, time])
+  @@index([studentId])
+  @@index([teacherId])
+  @@index([dayOfWeek])
+  @@map("student_schedule_reminders")
+}

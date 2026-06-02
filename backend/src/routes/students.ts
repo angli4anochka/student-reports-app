@@ -1,0 +1,253 @@
+import express from 'express';
+import { PrismaClient } from '@prisma/client';
+import { authenticateToken, AuthRequest } from '../middleware/auth';
+
+const router = express.Router();
+const prisma = new PrismaClient();
+
+router.use(authenticateToken);
+
+router.get('/', async (req: AuthRequest, res) => {
+  try {
+    const { groupId, q } = req.query;
+    const userId = req.user!.userId;
+    console.log('Students API called with params:', { groupId, q });
+
+    // Получаем данные пользователя для проверки роли
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true }
+    });
+
+    if (!currentUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    let where: any = {};
+
+    // ADMIN видит студентов только Вероники и Валерии
+    if (currentUser.role === 'ADMIN' || currentUser.role === 'ORG_ADMIN') {
+      const targetTeachers = await prisma.user.findMany({
+        where: {
+          email: { in: ['Kljvveronika@rambler.ru', 'lera.dagldiyan@mail.ru'] }
+        },
+        select: { id: true }
+      });
+
+      const teacherIds = targetTeachers.map(t => t.id);
+      where.teacherId = { in: teacherIds };
+    } else {
+      // TEACHER видит своих студентов + расшаренных
+      where.OR = [
+        { teacherId: userId },
+        { sharedTeachers: { some: { teacherId: userId } } }
+      ];
+    }
+
+    if (groupId) {
+      where.groupId = groupId;
+    }
+
+    if (q) {
+      where.fullName = {
+        contains: q as string,
+        mode: 'insensitive'
+      };
+    }
+
+    const students = await prisma.student.findMany({
+      where,
+      include: {
+        group: true,
+        _count: {
+          select: { grades: true }
+        }
+      },
+      orderBy: { fullName: 'asc' }
+    });
+
+    res.json(students);
+  } catch (error) {
+    console.error('Error fetching students:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.get('/:id', async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    
+    const student = await prisma.student.findFirst({
+      where: {
+        id,
+        teacherId: req.user!.userId
+      },
+      include: {
+        group: true,
+        grades: {
+          include: {
+            criteriaGrades: {
+              include: {
+                criterion: true
+              }
+            },
+            attachments: true
+          },
+          orderBy: { month: 'asc' }
+        }
+      }
+    });
+
+    if (!student) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    res.json(student);
+  } catch (error) {
+    console.error('Error fetching student:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/', async (req: AuthRequest, res) => {
+  try {
+    const { fullName, groupId, notes } = req.body;
+    const userId = req.user!.userId;
+
+    if (!fullName || !groupId) {
+      return res.status(400).json({ error: 'Full name and group are required' });
+    }
+
+    // Получаем группу для определения владельца
+    const group = await prisma.group.findUnique({
+      where: { id: groupId },
+      select: { teacherId: true }
+    });
+
+    if (!group) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+
+    // Получаем роль текущего пользователя
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true }
+    });
+
+    if (!currentUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Для ADMIN - студент принадлежит владельцу группы
+    // Для TEACHER - студент принадлежит текущему пользователю
+    const teacherId = (currentUser.role === 'ADMIN' || currentUser.role === 'ORG_ADMIN')
+      ? group.teacherId
+      : userId;
+
+    const student = await prisma.student.create({
+      data: {
+        fullName,
+        groupId,
+        notes: notes || null,
+        teacherId
+      },
+      include: {
+        group: true
+      }
+    });
+
+    res.status(201).json(student);
+  } catch (error) {
+    console.error('Error creating student:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.put('/:id', async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const { fullName, groupId, notes } = req.body;
+
+    const existingStudent = await prisma.student.findFirst({
+      where: {
+        id,
+        teacherId: req.user!.userId
+      }
+    });
+
+    if (!existingStudent) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    const student = await prisma.student.update({
+      where: { id },
+      data: {
+        fullName: fullName || existingStudent.fullName,
+        groupId: groupId || existingStudent.groupId,
+        notes: notes !== undefined ? notes : existingStudent.notes
+      },
+      include: {
+        group: true
+      }
+    });
+
+    res.json(student);
+  } catch (error) {
+    console.error('Error updating student:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.delete('/:id', async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user!.userId;
+
+    // Получаем роль пользователя
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true }
+    });
+
+    if (!currentUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    let whereCondition: any = { id };
+
+    // ADMIN может удалять студентов Вероники и Валерии
+    if (currentUser.role === 'ADMIN' || currentUser.role === 'ORG_ADMIN') {
+      const targetTeachers = await prisma.user.findMany({
+        where: {
+          email: { in: ['Kljvveronika@rambler.ru', 'lera.dagldiyan@mail.ru'] }
+        },
+        select: { id: true }
+      });
+
+      const teacherIds = targetTeachers.map(t => t.id);
+      whereCondition.teacherId = { in: teacherIds };
+    } else {
+      // TEACHER может удалять только своих студентов
+      whereCondition.teacherId = userId;
+    }
+
+    const existingStudent = await prisma.student.findFirst({
+      where: whereCondition
+    });
+
+    if (!existingStudent) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    await prisma.student.delete({
+      where: { id }
+    });
+
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting student:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+export default router;
