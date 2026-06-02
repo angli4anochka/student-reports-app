@@ -1,0 +1,55 @@
+name: Deploy
+
+# Деплой монорепо tutorsdesk (backend Node + frontend Vite) через self-hosted runner на VM.
+# На push в main: checkout -> rsync в боевую папку -> backend (prisma generate + pm2 restart) + frontend (vite build).
+#
+# >>> TODO подтвердить на VM в сессии: <<<
+#   - APP_DIR (реальный путь боевой папки на сервере)
+#   - имя PM2-процесса бэкенда (по памяти: student-reports-api, порт 3001)
+#   - куда build фронтенда (dist/) отдаёт nginx — путь не трогаем, vite перезаписывает dist на месте
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-reports
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, reports]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync to live dir, build & restart
+        run: |
+          set -euo pipefail
+          APP_DIR="/home/ubuntu/student-reports-app"   # TODO confirm on VM
+
+          # Синхронизация без --delete. Исключаем серверные данные/секреты/сборки.
+          rsync -a \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude 'node_modules' \
+            --exclude '.env' --exclude '.env.*' \
+            --exclude 'frontend/dist' \
+            --exclude 'backend/uploads' \
+            --exclude 'backend/exports' \
+            --exclude 'backend/database-backup' \
+            --exclude '*.db' --exclude '*.sqlite' \
+            ./ "$APP_DIR/"
+
+          # --- Backend (PM2: student-reports-api, :3001) ---
+          cd "$APP_DIR/backend"
+          npm install
+          npx prisma generate
+          pm2 restart student-reports-api --update-env   # TODO confirm process name
+
+          # --- Frontend (Vite -> dist/, отдаётся nginx) ---
+          cd "$APP_DIR/frontend"
+          npm install
+          npx vite build
+
+          echo "✅ student-reports-app deployed -> https://tutorsdesk.ru"
