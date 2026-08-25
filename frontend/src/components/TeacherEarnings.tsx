@@ -13,6 +13,7 @@ interface Student {
   fullName: string;
   groupId?: string | null;
   group?: { id: string; name: string } | null;
+  studyEndDate?: string | null;
 }
 
 interface Group {
@@ -313,6 +314,11 @@ const TeacherEarnings: React.FC = () => {
       return;
     }
     try {
+      const selectedStudent = students.find(student => student.id === slotForm.studentId);
+      const selectedWeekStart = currentWeekStart < '2026-09-01' && currentWeekStart >= '2026-08-31' ? '2026-09-01' : currentWeekStart;
+      const oneTimeEnd = new Date(currentWeekStart + 'T00:00:00');
+      oneTimeEnd.setDate(oneTimeEnd.getDate() + 6);
+      const oneTimeEndDate = oneTimeEnd.toISOString().slice(0, 10);
       if (slotForm.isRepeating) {
         // Create a recurring slot for each selected day
         const promises = slotForm.selectedDays.map(dayOfWeek =>
@@ -322,7 +328,9 @@ const TeacherEarnings: React.FC = () => {
             lessonTypeId: slotForm.lessonTypeId,
             studentId: slotForm.studentId || undefined,
             groupId: slotForm.groupId || undefined,
-            studentName: slotForm.studentName || undefined
+            studentName: slotForm.studentName || undefined,
+            startDate: selectedWeekStart,
+            endDate: selectedStudent?.studyEndDate?.slice(0, 10) || '2027-09-01'
           })
         );
         await Promise.all(promises);
@@ -335,7 +343,9 @@ const TeacherEarnings: React.FC = () => {
           lessonTypeId: slotForm.lessonTypeId,
           studentId: slotForm.studentId || undefined,
           groupId: slotForm.groupId || undefined,
-          studentName: slotForm.studentName || undefined
+          studentName: slotForm.studentName || undefined,
+          startDate: selectedWeekStart,
+          endDate: oneTimeEndDate
         });
       }
       setSlotForm({ selectedDays: [], time: '09:00', lessonTypeId: '', studentId: '', groupId: '', studentName: '', isRepeating: true, startTime: '09:00', endTime: '10:00' });
