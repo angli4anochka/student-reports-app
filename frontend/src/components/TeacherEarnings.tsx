@@ -105,6 +105,7 @@ const TeacherEarnings: React.FC = () => {
   const WEEKDAYS = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
   // Display order: Monday=1, Tuesday=2, ..., Sunday=0
   const WEEK_DISPLAY_ORDER = [1, 2, 3, 4, 5, 6, 0]; // Show week starting from Monday
+  const WEEKDAYS_DISPLAY = WEEK_DISPLAY_ORDER.map(dayOfWeek => WEEKDAYS[dayOfWeek]);
   const TIMES = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00', '21:00'];
 
   console.log('WEEK_DISPLAY_ORDER:', WEEK_DISPLAY_ORDER);
@@ -858,18 +859,18 @@ const TeacherEarnings: React.FC = () => {
                     key={i}
                     className={[
                       'flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer transition text-sm',
-                      slotForm.selectedDays.includes(i)
+                      slotForm.selectedDays.includes(WEEK_DISPLAY_ORDER[i])
                         ? 'bg-blue-50 border-blue-400 text-blue-700 font-semibold'
                         : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
                     ].join(' ')}
                   >
                     <input
                       type="checkbox"
-                      checked={slotForm.selectedDays.includes(i)}
+                      checked={slotForm.selectedDays.includes(WEEK_DISPLAY_ORDER[i])}
                       onChange={(e) => {
                         const newDays = e.target.checked
-                          ? [...slotForm.selectedDays, i]
-                          : slotForm.selectedDays.filter(d => d !== i);
+                          ? [...slotForm.selectedDays, WEEK_DISPLAY_ORDER[i]]
+                          : slotForm.selectedDays.filter(d => d !== WEEK_DISPLAY_ORDER[i]);
                         setSlotForm({ ...slotForm, selectedDays: newDays.sort() });
                       }}
                       className="rounded"
@@ -1312,18 +1313,18 @@ const TeacherEarnings: React.FC = () => {
                           key={i}
                           className={[
                             'flex items-center gap-2 px-3 py-2.5 rounded-xl border cursor-pointer transition text-sm font-medium',
-                            slotForm.selectedDays.includes(i)
+                            slotForm.selectedDays.includes(WEEK_DISPLAY_ORDER[i])
                               ? 'bg-blue-50 border-blue-400 text-blue-700'
                               : 'bg-white border-slate-200 text-slate-600 hover:border-blue-300'
                           ].join(' ')}
                         >
                           <input
                             type="checkbox"
-                            checked={slotForm.selectedDays.includes(i)}
+                            checked={slotForm.selectedDays.includes(WEEK_DISPLAY_ORDER[i])}
                             onChange={(e) => {
                               const newDays = e.target.checked
-                                ? [...slotForm.selectedDays, i]
-                                : slotForm.selectedDays.filter(d => d !== i);
+                                ? [...slotForm.selectedDays, WEEK_DISPLAY_ORDER[i]]
+                                : slotForm.selectedDays.filter(d => d !== WEEK_DISPLAY_ORDER[i]);
                               setSlotForm({ ...slotForm, selectedDays: newDays.sort() });
                             }}
                             className="rounded"
