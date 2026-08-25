@@ -34,6 +34,8 @@ interface Lesson {
   updatedAt: string;
 }
 
+type LessonMode = 'single' | 'trial' | 'permanent';
+
 const LessonsSchedule: React.FC = () => {
   // Function to get academic year for a given month number (01-12)
   // Academic year: Sep 2025 - Aug 2026
@@ -122,6 +124,8 @@ const LessonsSchedule: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [lessonMode, setLessonMode] = useState<LessonMode>('single');
+  const [repeatUntil, setRepeatUntil] = useState('');
   const [formData, setFormData] = useState({
     date: '',
     topic: '',
@@ -287,11 +291,30 @@ const LessonsSchedule: React.FC = () => {
     try {
       if (editingLesson) {
         await api.updateLesson(editingLesson.id, formData);
+      } else if (lessonMode === 'permanent') {
+        const [day, month, year] = formData.date.split('.').map(Number);
+        const startDate = new Date(year, month - 1, day);
+        const [endYear, endMonth, endDay] = repeatUntil.split('-').map(Number);
+        const endDate = new Date(endYear, endMonth - 1, endDay);
+        if (!repeatUntil || endDate < startDate) {
+          alert('Укажите дату окончания постоянного расписания');
+          return;
+        }
+        const requests = [];
+        for (const date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 7)) {
+          const occurrenceDate = String(date.getDate()).padStart(2, '0') + '.' + String(date.getMonth() + 1).padStart(2, '0') + '.' + date.getFullYear();
+          const duplicateExists = lessons.some(lesson => lesson.date === occurrenceDate && lesson.time === formData.time && (lesson.groupId || '') === formData.groupId && (lesson.studentId || '') === formData.studentId);
+          if (!duplicateExists) requests.push(api.createLesson({ ...formData, date: occurrenceDate }));
+        }
+        await Promise.all(requests);
       } else {
-        await api.createLesson(formData);
+        const topic = lessonMode === 'trial' && !formData.topic.startsWith('Пробный урок') ? 'Пробный урок: ' + formData.topic : formData.topic;
+        await api.createLesson({ ...formData, topic });
       }
       setFormData({ date: '', topic: '', homework: '', comment: '', groupId: '', studentId: '', time: '', notificationDate: '', lessonPlan: '' });
       setEditingLesson(null);
+      setLessonMode('single');
+      setRepeatUntil('');
       setShowAddForm(false);
       loadLessons();
     } catch (error) {
@@ -301,6 +324,8 @@ const LessonsSchedule: React.FC = () => {
   };
 
   const handleEdit = (lesson: Lesson) => {
+    setLessonMode('single');
+    setRepeatUntil('');
     setEditingLesson(lesson);
     setFormData({
       date: lesson.date,
@@ -330,6 +355,8 @@ const LessonsSchedule: React.FC = () => {
   const handleCancel = () => {
     setFormData({ date: '', topic: '', homework: '', comment: '', groupId: '', studentId: '', time: '', notificationDate: '', lessonPlan: '' });
     setEditingLesson(null);
+    setLessonMode('single');
+    setRepeatUntil('');
     setShowAddForm(false);
   };
 
@@ -536,6 +563,27 @@ const LessonsSchedule: React.FC = () => {
             {editingLesson ? 'Редактировать урок' : 'Добавить урок'}
           </h4>
           <form onSubmit={handleSubmit}>
+            {!editingLesson && (
+              <div className="mb-5">
+                <label className="block mb-2 text-sm font-semibold text-slate-600">Тип урока</label>
+                <div className="flex flex-wrap gap-2">
+                  {([['single', 'Разовый'], ['trial', 'Пробный'], ['permanent', 'Постоянный']] as const).map(([mode, label]) => (
+                    <button key={mode} type="button" onClick={() => setLessonMode(mode)} className={'px-4 py-2 rounded-xl text-sm font-semibold ' + (lessonMode === mode ? 'bg-blue-500 text-white shadow-md' : 'bg-slate-100 text-slate-600')}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-2 text-xs text-slate-400">
+                  {lessonMode === 'permanent' ? 'Каждая неделя сохранится отдельно: перенос изменит только выбранную неделю.' : lessonMode === 'trial' ? 'Только одна выбранная дата.' : 'Один урок на выбранную дату.'}
+                </p>
+              </div>
+            )}
+            {!editingLesson && lessonMode === 'permanent' && (
+              <div className="mb-4">
+                <label className="block mb-1.5 text-sm font-medium text-slate-600">Повторять каждую неделю до</label>
+                <input type="date" value={repeatUntil} onChange={(e) => setRepeatUntil(e.target.value)} required style={inputStyle} />
+              </div>
+            )}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
               <div>
                 <label className="block mb-1.5 text-sm font-medium text-slate-600">Дата</label>
