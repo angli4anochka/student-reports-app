@@ -1042,7 +1042,7 @@ const TeacherEarnings: React.FC = () => {
                             {/* Event card */}
                             <div className={`rounded-2xl px-3 py-2 ${cardBg} border ${cardBorder} ${cardText} shadow-sm`}>
                               <div className="font-semibold text-sm leading-tight">
-                                {slot.student?.fullName || slot.studentName || 'Ученик'}
+                                {completed?.customGroup?.name || completed?.customStudent?.fullName || slot.group?.name || slot.student?.fullName || slot.studentName || 'Не указано'}
                                 {(completed?.customLessonTypeId || (completed?.customPrice !== null && completed?.customPrice !== undefined)) && (
                                   <span className="ml-1 text-xs opacity-60" title="Изменено для этой недели">✎</span>
                                 )}
