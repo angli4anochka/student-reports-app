@@ -48,6 +48,36 @@ const LessonsSchedule: React.FC = () => {
     return 2026;
   };
 
+  // Resolve the real calendar year for a lesson date, using the stored year if present
+  // (older lessons saved as "DD.MM" have no year, so fall back to the academic-year guess)
+  const getLessonYear = (dateStr: string): number => {
+    const [, month, yearStr] = dateStr.split('.');
+    return yearStr ? parseInt(yearStr, 10) : getAcademicYear(month);
+  };
+
+  // Academic year label like "2025-2026" for a lesson date (Sep-Dec belongs to the year starting then)
+  const getAcademicYearLabel = (dateStr: string): string => {
+    const [, monthStr] = dateStr.split('.');
+    const month = parseInt(monthStr, 10);
+    const year = getLessonYear(dateStr);
+    return month >= 9 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
+  };
+
+  // Current academic year label based on today's real date
+  const getCurrentAcademicYearLabel = () => {
+    const now = new Date();
+    const month = now.getMonth() + 1;
+    const year = now.getFullYear();
+    return month >= 9 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
+  };
+
+  // Chronological sort key across years, since the stored date string sorts wrong as text
+  const getSortableDate = (dateStr: string): number => {
+    const [dayStr, monthStr] = dateStr.split('.');
+    const year = getLessonYear(dateStr);
+    return new Date(year, parseInt(monthStr, 10) - 1, parseInt(dayStr, 10)).getTime();
+  };
+
   // Function to get current month name in Russian
   const getCurrentMonth = () => {
     const monthNames = [
@@ -73,12 +103,22 @@ const LessonsSchedule: React.FC = () => {
     return savedGroup || '';
   };
 
+  // Get initial academic year from localStorage or use the current academic year
+  const getInitialYear = () => {
+    const savedYear = localStorage.getItem('selectedYear');
+    if (savedYear) {
+      return savedYear;
+    }
+    return getCurrentAcademicYearLabel();
+  };
+
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [filteredLessons, setFilteredLessons] = useState<Lesson[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<string>(getInitialGroup());
   const [selectedMonth, setSelectedMonth] = useState<string>(getInitialMonth());
+  const [selectedYear, setSelectedYear] = useState<string>(getInitialYear());
   const [loading, setLoading] = useState(false);
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -124,10 +164,10 @@ const LessonsSchedule: React.FC = () => {
     });
   };
 
-  // Academic year order: September to June
+  // Academic year order: September to August
   const MONTHS = [
     'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь',
-    'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь'
+    'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август'
   ];
 
   useEffect(() => {
@@ -138,7 +178,7 @@ const LessonsSchedule: React.FC = () => {
 
   useEffect(() => {
     filterLessons();
-  }, [lessons, selectedGroup, selectedMonth]);
+  }, [lessons, selectedGroup, selectedMonth, selectedYear]);
 
   // Save selected group to localStorage when it changes
   useEffect(() => {
@@ -149,6 +189,11 @@ const LessonsSchedule: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('selectedMonth', selectedMonth);
   }, [selectedMonth]);
+
+  // Save selected academic year to localStorage when it changes
+  useEffect(() => {
+    localStorage.setItem('selectedYear', selectedYear);
+  }, [selectedYear]);
 
   // Auto-fill group/student when selected tab changes
   useEffect(() => {
@@ -174,6 +219,11 @@ const LessonsSchedule: React.FC = () => {
     }
     // If selectedGroup === '', show ALL lessons (groups + individual)
 
+    // Filter by academic year
+    if (selectedYear) {
+      filtered = filtered.filter(lesson => getAcademicYearLabel(lesson.date) === selectedYear);
+    }
+
     // Filter by month
     if (selectedMonth) {
       const monthNumber = MONTH_TO_NUMBER[selectedMonth];
@@ -184,6 +234,9 @@ const LessonsSchedule: React.FC = () => {
         });
       }
     }
+
+    // Sort chronologically (most recent first) — the raw date string sorts wrong across years
+    filtered = [...filtered].sort((a, b) => getSortableDate(b.date) - getSortableDate(a.date));
 
     setFilteredLessons(filtered);
   };
@@ -292,6 +345,14 @@ const LessonsSchedule: React.FC = () => {
     boxSizing: 'border-box' as const
   };
 
+  // Academic years present in the loaded lessons, always including the current one
+  const currentAcademicYear = getCurrentAcademicYearLabel();
+  const nextAcademicYearStart = parseInt(currentAcademicYear, 10) + 1;
+  const nextAcademicYear = nextAcademicYearStart + '-' + (nextAcademicYearStart + 1);
+  const availableYears = Array.from(
+    new Set([currentAcademicYear, nextAcademicYear, ...lessons.map(lesson => getAcademicYearLabel(lesson.date))])
+  ).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -395,6 +456,42 @@ const LessonsSchedule: React.FC = () => {
           </div>
         </div>
 
+        {/* Year filter */}
+        <div>
+          <label className="block mb-2 text-sm font-semibold text-slate-500 uppercase tracking-wide">
+            Учебный год
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setSelectedYear('')}
+              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${
+                selectedYear === ''
+                  ? 'bg-blue-500 text-white shadow-md'
+                  : 'bg-white border border-slate-200 text-slate-600 hover:border-blue-300 hover:bg-blue-50 shadow-sm'
+              }`}
+            >
+              Все года
+            </button>
+
+            {availableYears.map(year => {
+              const isSelected = selectedYear === year;
+              return (
+                <button
+                  key={year}
+                  onClick={() => setSelectedYear(year)}
+                  className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${
+                    isSelected
+                      ? 'bg-blue-500 text-white shadow-md'
+                      : 'bg-white border border-slate-200 text-slate-600 hover:border-blue-300 hover:bg-blue-50 shadow-sm'
+                  }`}
+                >
+                  {year}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Month filter */}
         <div>
           <label className="block mb-2 text-sm font-semibold text-slate-500 uppercase tracking-wide">
@@ -445,9 +542,9 @@ const LessonsSchedule: React.FC = () => {
                 <input
                   type="date"
                   value={formData.date ? (() => {
-                    const [day, month] = formData.date.split('.');
+                    const [day, month, existingYear] = formData.date.split('.');
                     if (day && month) {
-                      const year = getAcademicYear(month);
+                      const year = existingYear || getAcademicYear(month);
                       return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
                     }
                     return '';
@@ -455,7 +552,7 @@ const LessonsSchedule: React.FC = () => {
                   onChange={(e) => {
                     if (e.target.value) {
                       const [year, month, day] = e.target.value.split('-');
-                      setFormData({ ...formData, date: `${day}.${month}` });
+                      setFormData({ ...formData, date: `${day}.${month}.${year}` });
                     } else {
                       setFormData({ ...formData, date: '' });
                     }
@@ -543,9 +640,9 @@ const LessonsSchedule: React.FC = () => {
                 <input
                   type="date"
                   value={formData.notificationDate ? (() => {
-                    const [day, month] = formData.notificationDate.split('.');
+                    const [day, month, existingYear] = formData.notificationDate.split('.');
                     if (day && month) {
-                      const year = getAcademicYear(month);
+                      const year = existingYear || getAcademicYear(month);
                       return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
                     }
                     return '';
@@ -553,7 +650,7 @@ const LessonsSchedule: React.FC = () => {
                   onChange={(e) => {
                     if (e.target.value) {
                       const [year, month, day] = e.target.value.split('-');
-                      setFormData({ ...formData, notificationDate: `${day}.${month}` });
+                      setFormData({ ...formData, notificationDate: `${day}.${month}.${year}` });
                     } else {
                       setFormData({ ...formData, notificationDate: '' });
                     }
