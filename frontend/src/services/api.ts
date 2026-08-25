@@ -121,14 +121,14 @@ class ApiService {
     return this.request<any>(`/students/${id}`);
   }
 
-  async createStudent(data: { fullName: string; groupId?: string; notes?: string; teacherId?: string }) {
+  async createStudent(data: { fullName: string; groupId?: string; notes?: string; studyEndDate?: string; teacherId?: string }) {
     return this.request<any>('/students', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
-  async updateStudent(id: string, data: { fullName?: string; group?: string; notes?: string }) {
+  async updateStudent(id: string, data: { fullName?: string; group?: string; notes?: string; studyEndDate?: string }) {
     return this.request<any>(`/students/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),

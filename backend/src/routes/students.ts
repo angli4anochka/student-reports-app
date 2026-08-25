@@ -111,7 +111,7 @@ router.get('/:id', async (req: AuthRequest, res) => {
 
 router.post('/', async (req: AuthRequest, res) => {
   try {
-    const { fullName, groupId, notes } = req.body;
+    const { fullName, groupId, notes, studyEndDate } = req.body;
     const userId = req.user!.userId;
 
     if (!fullName || !groupId) {
@@ -149,6 +149,7 @@ router.post('/', async (req: AuthRequest, res) => {
         fullName,
         groupId,
         notes: notes || null,
+        studyEndDate: studyEndDate ? new Date(studyEndDate) : null,
         teacherId
       },
       include: {
@@ -166,7 +167,7 @@ router.post('/', async (req: AuthRequest, res) => {
 router.put('/:id', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
-    const { fullName, groupId, notes } = req.body;
+    const { fullName, groupId, notes, studyEndDate } = req.body;
 
     const existingStudent = await prisma.student.findFirst({
       where: {
@@ -184,7 +185,8 @@ router.put('/:id', async (req: AuthRequest, res) => {
       data: {
         fullName: fullName || existingStudent.fullName,
         groupId: groupId || existingStudent.groupId,
-        notes: notes !== undefined ? notes : existingStudent.notes
+        notes: notes !== undefined ? notes : existingStudent.notes,
+        studyEndDate: studyEndDate !== undefined ? (studyEndDate ? new Date(studyEndDate) : null) : existingStudent.studyEndDate
       },
       include: {
         group: true

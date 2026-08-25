@@ -15,6 +15,7 @@ interface Student {
   id: string;
   fullName: string;
   groupId?: string | null;
+  studyEndDate?: string | null;
 }
 
 interface Lesson {
@@ -568,7 +569,13 @@ const LessonsSchedule: React.FC = () => {
                 <label className="block mb-2 text-sm font-semibold text-slate-600">Тип урока</label>
                 <div className="flex flex-wrap gap-2">
                   {([['single', 'Разовый'], ['trial', 'Пробный'], ['permanent', 'Постоянный']] as const).map(([mode, label]) => (
-                    <button key={mode} type="button" onClick={() => setLessonMode(mode)} className={'px-4 py-2 rounded-xl text-sm font-semibold ' + (lessonMode === mode ? 'bg-blue-500 text-white shadow-md' : 'bg-slate-100 text-slate-600')}>
+                    <button key={mode} type="button" onClick={() => {
+                        setLessonMode(mode);
+                        if (mode === 'permanent') {
+                          const student = students.find(item => item.id === formData.studentId);
+                          setRepeatUntil(student?.studyEndDate?.slice(0, 10) || '2027-09-01');
+                        }
+                      }} className={'px-4 py-2 rounded-xl text-sm font-semibold ' + (lessonMode === mode ? 'bg-blue-500 text-white shadow-md' : 'bg-slate-100 text-slate-600')}>
                       {label}
                     </button>
                   ))}
@@ -627,7 +634,12 @@ const LessonsSchedule: React.FC = () => {
                   <label className="block mb-1.5 text-sm font-medium text-slate-600">Ученик</label>
                   <select
                     value={formData.studentId}
-                    onChange={(e) => setFormData({ ...formData, studentId: e.target.value })}
+                    onChange={(e) => {
+                      const studentId = e.target.value;
+                      const student = students.find(item => item.id === studentId);
+                      setFormData({ ...formData, studentId });
+                      if (lessonMode === 'permanent') setRepeatUntil(student?.studyEndDate?.slice(0, 10) || '2027-09-01');
+                    }}
                     style={inputStyle}
                   >
                     <option value="">Не указан</option>

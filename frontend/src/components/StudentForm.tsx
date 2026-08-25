@@ -23,6 +23,7 @@ interface Student {
   groupId?: string;
   group?: Group;
   notes?: string;
+  studyEndDate?: string;
   teacherId: string;
   createdAt: string;
   updatedAt: string;
@@ -53,6 +54,7 @@ const StudentForm: React.FC<StudentFormProps> = ({
   const [formData, setFormData] = useState({
     fullName: '',
     notes: '',
+    studyEndDate: '2027-09-01',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -64,6 +66,7 @@ const StudentForm: React.FC<StudentFormProps> = ({
       setFormData({
         fullName: student.fullName,
         notes: student.notes || '',
+        studyEndDate: student.studyEndDate ? student.studyEndDate.slice(0, 10) : '2027-09-01',
       });
     }
   }, [student]);
@@ -197,6 +200,10 @@ const StudentForm: React.FC<StudentFormProps> = ({
         </div>
 
         <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}>Учится до</label>
+            <input type="date" value={formData.studyEndDate} onChange={(e) => setFormData({ ...formData, studyEndDate: e.target.value })} style={{ width: '100%', padding: '0.75rem', border: '1px solid #d1d5db', borderRadius: '8px' }} />
+          </div>
           <div style={{ marginBottom: '1rem' }}>
             <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
               ФИО ученика *
