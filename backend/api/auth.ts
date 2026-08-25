@@ -150,8 +150,9 @@ async function handleLogin(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Email and password required' });
   }
 
+  const normalizedEmail = String(email).trim().toLowerCase();
   const user = await prisma.user.findUnique({
-    where: { email },
+    where: { email: normalizedEmail },
     select: { id: true, email: true, fullName: true, role: true, password: true }
   });
 

@@ -38,7 +38,8 @@ class ApiService {
     });
 
     // Handle 401 Unauthorized - token expired or invalid
-    if (response.status === 401) {
+    const isAuthRequest = endpoint === '/auth/login' || endpoint === '/auth/register';
+    if (response.status === 401 && !isAuthRequest) {
       this.clearToken();
       localStorage.removeItem('user');
       // Reload page to redirect to login
@@ -63,7 +64,7 @@ class ApiService {
   async login(email: string, password: string) {
     const response = await this.request<{ token: string; user: any }>('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
 
     });
 
