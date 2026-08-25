@@ -404,6 +404,10 @@ class ApiService {
     });
   }
 
+  async getSchedule(weekStart: string) {
+    return this.getCompletedLessons(weekStart);
+  }
+
   // Completed Lessons
   async getCompletedLessons(weekStart: string) {
     return this.request<any[]>(`/teacher-earnings?entity=completed&weekStart=${weekStart}`);
