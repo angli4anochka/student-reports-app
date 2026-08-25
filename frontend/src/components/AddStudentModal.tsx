@@ -73,7 +73,7 @@ const AddStudentModal: React.FC<AddStudentModalProps> = ({
       onStudentAdded();
       onClose();
     } catch (error: any) {
-      setError(error.response?.data?.error || 'Ошибка при добавлении ученика');
+      setError(error instanceof Error ? error.message : 'Ошибка при добавлении ученика');
     } finally {
       setLoading(false);
     }

@@ -114,17 +114,17 @@ router.post('/', async (req: AuthRequest, res) => {
     const { fullName, groupId, notes, studyEndDate } = req.body;
     const userId = req.user!.userId;
 
-    if (!fullName || !groupId) {
-      return res.status(400).json({ error: 'Full name and group are required' });
+    if (!fullName) {
+      return res.status(400).json({ error: 'Full name is required' });
     }
 
     // Получаем группу для определения владельца
-    const group = await prisma.group.findUnique({
+    const group = groupId ? await prisma.group.findUnique({
       where: { id: groupId },
       select: { teacherId: true }
-    });
+    }) : null;
 
-    if (!group) {
+    if (groupId && !group) {
       return res.status(404).json({ error: 'Group not found' });
     }
 
@@ -141,15 +141,15 @@ router.post('/', async (req: AuthRequest, res) => {
     // Для ADMIN - студент принадлежит владельцу группы
     // Для TEACHER - студент принадлежит текущему пользователю
     const teacherId = (currentUser.role === 'ADMIN' || currentUser.role === 'ORG_ADMIN')
-      ? group.teacherId
+      ? (group?.teacherId || userId)
       : userId;
 
     const student = await prisma.student.create({
       data: {
         fullName,
-        groupId,
+        groupId: groupId || null,
         notes: notes || null,
-        studyEndDate: studyEndDate ? new Date(studyEndDate) : null,
+        studyEndDate: new Date(studyEndDate || '2027-09-01'),
         teacherId
       },
       include: {
