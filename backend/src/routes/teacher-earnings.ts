@@ -178,6 +178,8 @@ async function handleLessonTypes(req: VercelRequest, res: VercelResponse, userId
 async function handleSchedule(req: VercelRequest, res: VercelResponse, userId: string) {
   try {
     const { id } = req.query;
+    const weekStartStr = (req.query.weekStart as string) || '1900-01-01';
+    const periodEnd = req.query.weekStart ? getPeriodEndDate(weekStartStr) : '9999-12-31';
 
     // Получаем данные пользователя для проверки организации
     const currentUser = await prisma.user.findUnique({
@@ -242,6 +244,8 @@ async function handleSchedule(req: VercelRequest, res: VercelResponse, userId: s
         LEFT JOIN students st ON s."studentId" = st.id
         LEFT JOIN groups g ON s."groupId" = g.id
         WHERE s."teacherId" = ${userId}
+          AND (s."start_date" IS NULL OR s."start_date" <= ${periodEnd}::date)
+          AND (s."end_date" IS NULL OR s."end_date" >= ${weekStartStr}::date)
         ORDER BY s."dayOfWeek" ASC, s.time ASC
       `;
       return res.json(slots);
@@ -249,7 +253,7 @@ async function handleSchedule(req: VercelRequest, res: VercelResponse, userId: s
   }
 
   if (req.method === 'POST') {
-    const { dayOfWeek, time, lessonTypeId, studentName, studentId, groupId } = req.body;
+    const { dayOfWeek, time, lessonTypeId, studentName, studentId, groupId, startDate, endDate } = req.body;
     if (dayOfWeek === undefined || !time || !lessonTypeId) {
       return res.status(400).json({ error: 'dayOfWeek, time, and lessonTypeId are required' });
     }
@@ -258,14 +262,16 @@ async function handleSchedule(req: VercelRequest, res: VercelResponse, userId: s
 
     // Use ON CONFLICT to handle duplicates
     await prisma.$executeRaw`
-      INSERT INTO personal_schedule_slots (id, "dayOfWeek", time, "studentName", "studentId", "groupId", "teacherId", "lessonTypeId", "createdAt", "updatedAt")
-      VALUES (${slotId}, ${parseInt(dayOfWeek)}, ${time}, ${studentName || null}, ${studentId || null}, ${groupId || null}, ${userId}, ${lessonTypeId}, NOW(), NOW())
+      INSERT INTO personal_schedule_slots (id, "dayOfWeek", time, "studentName", "studentId", "groupId", "teacherId", "lessonTypeId", "start_date", "end_date", "createdAt", "updatedAt")
+      VALUES (${slotId}, ${parseInt(dayOfWeek)}, ${time}, ${studentName || null}, ${studentId || null}, ${groupId || null}, ${userId}, ${lessonTypeId}, ${startDate || null}::date, ${endDate || null}::date, NOW(), NOW())
       ON CONFLICT ("teacherId", "dayOfWeek", time)
       DO UPDATE SET
         "studentName" = EXCLUDED."studentName",
         "studentId" = EXCLUDED."studentId",
         "groupId" = EXCLUDED."groupId",
         "lessonTypeId" = EXCLUDED."lessonTypeId",
+        "start_date" = EXCLUDED."start_date",
+        "end_date" = EXCLUDED."end_date",
         "updatedAt" = NOW()
     `;
 
@@ -304,7 +310,7 @@ async function handleSchedule(req: VercelRequest, res: VercelResponse, userId: s
       return res.status(400).json({ error: 'Schedule slot ID required' });
     }
 
-    const { dayOfWeek, time, lessonTypeId, studentName, studentId, groupId } = req.body;
+    const { dayOfWeek, time, lessonTypeId, studentName, studentId, groupId, startDate, endDate } = req.body;
 
     // Check ownership
     const existing = await prisma.$queryRaw<any[]>`
@@ -434,7 +440,13 @@ async function handleCompleted(req: VercelRequest, res: VercelResponse, userId: 
 
       // Get all schedule slots for this teacher
       const teacherSlots = await prisma.personalScheduleSlot.findMany({
-        where: { teacherId: userId },
+        where: {
+          teacherId: userId,
+          AND: [
+            { OR: [{ startDate: null }, { startDate: { lte: new Date(periodEnd) } }] },
+            { OR: [{ endDate: null }, { endDate: { gte: new Date(weekStartStr) } }] }
+          ]
+        },
         select: { id: true }
       });
 
@@ -541,6 +553,8 @@ async function handleCompleted(req: VercelRequest, res: VercelResponse, userId: 
         LEFT JOIN students cst ON cl."customStudentId" = cst.id
         LEFT JOIN groups cg ON cl."customGroupId" = cg.id
         WHERE s."teacherId" = ${userId}
+          AND (s."start_date" IS NULL OR s."start_date" <= ${periodEnd}::date)
+          AND (s."end_date" IS NULL OR s."end_date" >= ${weekStartStr}::date)
         GROUP BY s.id, lt.id, st.id, g.id, so.id, so."newDayOfWeek", so."newTime"
         -- ✅ Сортируем по ПЕРЕОПРЕДЕЛЕННОМУ расписанию (если есть) или базовому
         ORDER BY COALESCE(so."newDayOfWeek", s."dayOfWeek") ASC, COALESCE(so."newTime", s.time) ASC
@@ -757,6 +771,7 @@ async function handleCompleted(req: VercelRequest, res: VercelResponse, userId: 
 
 // Handler for calculating week/period earnings - using raw SQL
 async function handleWeekEarnings(req: VercelRequest, res: VercelResponse, userId: string) {
+  const weekStartStr = req.query.weekStart as string;
   try {
     if (req.method !== 'GET') {
       return res.status(405).json({ error: 'Method not allowed' });
@@ -823,6 +838,8 @@ async function handleWeekEarnings(req: VercelRequest, res: VercelResponse, userI
         INNER JOIN lesson_types lt ON s."lessonTypeId" = lt.id
         LEFT JOIN lesson_types clt ON cl."customLessonTypeId" = clt.id
         WHERE s."teacherId" = ${userId}
+          AND (s."start_date" IS NULL OR s."start_date" <= ${periodEnd}::date)
+          AND (s."end_date" IS NULL OR s."end_date" >= ${weekStartStr}::date)
           AND cl."weekStart" >= ${weekStart as string}
           AND cl."weekStart" <= ${periodEnd}
       `;
@@ -847,6 +864,8 @@ async function handleWeekEarnings(req: VercelRequest, res: VercelResponse, userI
         INNER JOIN lesson_types lt ON s."lessonTypeId" = lt.id
         LEFT JOIN lesson_types clt ON cl."customLessonTypeId" = clt.id
         WHERE s."teacherId" = ${userId}
+          AND (s."start_date" IS NULL OR s."start_date" <= ${periodEnd}::date)
+          AND (s."end_date" IS NULL OR s."end_date" >= ${weekStartStr}::date)
           AND cl."weekStart" = ${weekStart as string}
       `;
     }

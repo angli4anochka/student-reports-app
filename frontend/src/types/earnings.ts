@@ -14,6 +14,7 @@ export interface Student {
   fullName: string;
   groupId?: string | null;
   group?: { id: string; name: string } | null;
+  studyEndDate?: string | null;
 }
 
 export interface Group {

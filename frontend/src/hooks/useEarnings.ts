@@ -184,7 +184,8 @@ export const useEarnings = () => {
   // Schedule slot operations
   const createScheduleSlot = useCallback(async (data: SlotFormData) => {
     try {
-      await api.createScheduleSlot(data);
+      const student = students.find(item => item.id === data.studentId);
+      await api.createScheduleSlot({ ...data, startDate: currentWeekStart, endDate: student?.studyEndDate?.slice(0, 10) });
       await loadSchedule(currentWeekStart);
       setShowAddSlot(false);
       setSlotForm({
@@ -199,7 +200,7 @@ export const useEarnings = () => {
       setError('Ошибка создания слота');
       console.error('Error creating schedule slot:', err);
     }
-  }, [currentWeekStart, loadSchedule]);
+  }, [currentWeekStart, loadSchedule, students]);
 
   const updateScheduleSlot = useCallback(async (id: string, data: Partial<ScheduleSlot>) => {
     try {
@@ -210,7 +211,7 @@ export const useEarnings = () => {
       setError('Ошибка обновления слота');
       console.error('Error updating schedule slot:', err);
     }
-  }, [currentWeekStart, loadSchedule]);
+  }, [currentWeekStart, loadSchedule, students]);
 
   const deleteScheduleSlot = useCallback(async (id: string) => {
     if (window.confirm('Удалить этот слот из расписания?')) {
@@ -222,7 +223,7 @@ export const useEarnings = () => {
         console.error('Error deleting schedule slot:', err);
       }
     }
-  }, [currentWeekStart, loadSchedule]);
+  }, [currentWeekStart, loadSchedule, students]);
 
   // Create schedule override for a specific week
   const createScheduleOverride = useCallback(async (scheduleSlotId: string, weekStart: string, newDayOfWeek: number, newTime: string) => {

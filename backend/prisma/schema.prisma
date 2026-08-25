@@ -443,6 +443,8 @@ model PersonalScheduleSlot {
   groupId      String? // Link to actual group
   teacherId    String
   lessonTypeId String
+  startDate    DateTime? @db.Date @map("start_date")
+  endDate      DateTime? @db.Date @map("end_date")
 
   teacher          User                @relation(fields: [teacherId], references: [id], onDelete: Cascade)
   lessonType       LessonType          @relation(fields: [lessonTypeId], references: [id], onDelete: Cascade)

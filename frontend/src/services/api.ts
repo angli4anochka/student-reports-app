@@ -384,7 +384,7 @@ class ApiService {
     return this.request<any[]>('/teacher-earnings?entity=schedule');
   }
 
-  async createScheduleSlot(data: { dayOfWeek: number; time: string; lessonTypeId: string; studentId?: string; groupId?: string; studentName?: string }) {
+  async createScheduleSlot(data: { dayOfWeek: number; time: string; lessonTypeId: string; studentId?: string; groupId?: string; studentName?: string; startDate?: string; endDate?: string }) {
     return this.request<any>('/teacher-earnings?entity=schedule', {
       method: 'POST',
       body: JSON.stringify(data),
